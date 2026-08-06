@@ -1,0 +1,2196 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MediCare — კლინიკის ჩაწერის სისტემა</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  // თემის ადრეული გამოყენება — რომ არ იყოს light->dark ციმციმი გვერდის ჩატვირთვისას
+  (function () {
+    var saved = localStorage.getItem('mc_theme');
+    var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (saved === 'dark' || (!saved && prefersDark)) document.documentElement.classList.add('dark');
+  })();
+</script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          paper: '#F6F4EE',
+          surface: '#FFFFFF',
+          ink: '#16221F',
+          muted: '#6B7A78',
+          border: '#E4DFD4',
+          primary: '#0F766E',
+          primaryDark: '#0B5C55',
+          clay: '#D97757',
+          success: '#2F855A',
+          danger: '#C0392B',
+        },
+        fontFamily: {
+          display: ['Fraunces', 'serif'],
+          body: ['Inter', 'sans-serif'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #F6F4EE; color: #16221F; }
+  h1, h2, h3, .display { font-family: 'Fraunces', serif; }
+  .heartbeat-path {
+    stroke-dasharray: 600;
+    stroke-dashoffset: 600;
+    animation: draw 2.2s ease-out forwards;
+  }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .fade-in { animation: fadeIn .4s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: #E4DFD4; border-radius: 4px; }
+  input:focus, textarea:focus, select:focus { outline: 2px solid #0F766E; outline-offset: 1px; }
+  .badge { display:inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .hero-photo {
+    position: relative;
+    background: radial-gradient(120% 140% at 15% 10%, #14988c 0%, #0F766E 45%, #0B5C55 100%);
+    overflow: hidden;
+  }
+  .hero-photo::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle at 85% 15%, rgba(255,255,255,.16) 0, rgba(255,255,255,.16) 60px, transparent 61px),
+      radial-gradient(circle at 75% 75%, rgba(255,255,255,.10) 0, rgba(255,255,255,.10) 90px, transparent 91px),
+      radial-gradient(circle at 10% 85%, rgba(217,119,87,.25) 0, rgba(217,119,87,.25) 70px, transparent 71px);
+    pointer-events: none;
+  }
+  .hero-photo::after {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='white' stroke-opacity='0.08' stroke-width='2'%3E%3Cpath d='M30 10v20M20 20h20'/%3E%3Cpath d='M90 60v20M80 70h20'/%3E%3Cpath d='M15 90v16M7 98h16'/%3E%3Ccircle cx='95' cy='20' r='7'/%3E%3C/g%3E%3C/svg%3E");
+    background-repeat: repeat;
+    pointer-events: none;
+  }
+  .icon-svg { width: 1em; height: 1em; display: inline-block; vertical-align: -0.125em; }
+  .empty-state svg { width: 48px; height: 48px; }
+  .star-input span { cursor: pointer; font-size: 22px; line-height: 1; }
+  .avatar-ring { box-shadow: 0 0 0 3px #FFFFFF, 0 0 0 5px var(--ring-color, #0F766E); }
+  .grad-primary { background: linear-gradient(135deg, #0F766E 0%, #0B5C55 100%); }
+  .grad-clay { background: linear-gradient(135deg, #E08A63 0%, #D97757 100%); }
+  .card-hover { transition: transform .18s ease, box-shadow .18s ease; }
+  .card-hover:hover { transform: translateY(-3px); box-shadow: 0 12px 24px -12px rgba(15,34,31,.18); }
+  .urgency-emergency { background: #FCEBEA; color: #C0392B; border-color: #F2C6C2; }
+  .urgency-urgent { background: #FDF3E4; color: #B45309; border-color: #F5DFB3; }
+  .urgency-routine { background: #E9F5F0; color: #2F855A; border-color: #C7E7D8; }
+  .pulse-dot { animation: pulseDot 1.6s ease-in-out infinite; }
+  @keyframes pulseDot { 0%,100% { opacity: 1; transform: scale(1);} 50% { opacity: .5; transform: scale(1.3);} }
+  .decorative-blob {
+    position: absolute; border-radius: 50%; filter: blur(60px); opacity: .35; pointer-events: none; z-index: 0;
+  }
+  @media (max-width: 640px) {
+    .max-w-6xl { padding-left: 12px; padding-right: 12px; }
+  }
+
+  /* ------------------------------ Dark mode ------------------------------ */
+  .dark body { background: #0E1513; color: #E7EFEC; }
+  .dark .bg-paper { background-color: #0E1513 !important; }
+  .dark .bg-surface { background-color: #172420 !important; }
+  .dark .bg-surface\/80 { background-color: rgba(23,36,32,.85) !important; }
+  .dark .border-border { border-color: #2B3833 !important; }
+  .dark .text-ink { color: #E7EFEC !important; }
+  .dark .text-ink\/80 { color: rgba(231,239,236,.8) !important; }
+  .dark .text-muted { color: #8FA39D !important; }
+  .dark .text-muted\/50 { color: rgba(143,163,157,.5) !important; }
+  .dark .bg-primary { background-color: #14B8A6 !important; }
+  .dark .bg-primary\/10 { background-color: rgba(20,184,166,.16) !important; }
+  .dark .bg-primary\/5 { background-color: rgba(20,184,166,.08) !important; }
+  .dark .border-primary { border-color: #14B8A6 !important; }
+  .dark .border-primary\/30 { border-color: rgba(20,184,166,.35) !important; }
+  .dark .text-primary { color: #2DD4BF !important; }
+  .dark .bg-clay { background-color: #E08A63 !important; }
+  .dark .text-clay { color: #E8A181 !important; }
+  .dark .bg-white\/20 { background-color: rgba(255,255,255,.12) !important; }
+  .dark .bg-white\/90 { background-color: rgba(23,36,32,.92) !important; color: #E7EFEC; }
+  .dark .bg-danger\/10 { background-color: rgba(224,90,74,.16) !important; }
+  .dark .text-danger { color: #E85F4C !important; }
+  .dark .bg-success\/10 { background-color: rgba(74,196,140,.16) !important; }
+  .dark .text-success { color: #4AC48C !important; }
+  .dark .bg-ink { background-color: #E7EFEC !important; color: #0E1513 !important; }
+  .dark input, .dark textarea, .dark select { color: #E7EFEC; }
+  .dark input::placeholder, .dark textarea::placeholder { color: #6B7F78; }
+  .dark ::-webkit-scrollbar-thumb { background: #2B3833; }
+  .dark .avatar-ring { box-shadow: 0 0 0 3px #172420, 0 0 0 5px var(--ring-color, #14B8A6); }
+  .dark .urgency-emergency { background: #3A1712; color: #F2A79A; border-color: #5C241C; }
+  .dark .urgency-urgent { background: #3A2A0E; color: #F2C97D; border-color: #5C4416; }
+  .dark .urgency-routine { background: #103A26; color: #7FE0B4; border-color: #1B5C3E; }
+  .dark .shadow-xl, .dark .shadow-lg { filter: brightness(1.15); }
+  .theme-toggle-icon .sun { display: none; }
+  .dark .theme-toggle-icon .sun { display: inline-flex; }
+  .dark .theme-toggle-icon .moon { display: none; }
+
+  /* ------------------------------ Body map ------------------------------ */
+  .bodymap-shape { fill: #C9D6D2; stroke: #7C8F89; stroke-width: 1.5; transition: fill .15s ease; }
+  .dark .bodymap-shape { fill: #3A4A45; stroke: #5C726A; }
+  .bodymap-hotspot { fill: currentColor; opacity: .18; cursor: pointer; transition: opacity .15s ease, transform .15s ease; transform-origin: center; }
+  .bodymap-hotspot:hover, .bodymap-hotspot.active { opacity: .45; transform: scale(1.08); }
+  .bodymap-label {
+    position: absolute; pointer-events: none; transform: translate(-50%, -110%);
+    background: #16221F; color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 6px;
+    white-space: nowrap; opacity: 0; transition: opacity .12s ease; z-index: 5;
+  }
+  .bodymap-label.show { opacity: 1; }
+</style>
+</head>
+<body class="bg-paper text-ink">
+
+<div id="toast" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+<div id="app" class="min-h-screen"></div>
+
+<script>
+/* =========================================================================
+   MediCare — Clinic Appointment System
+   Vanilla JS single-page frontend (no build step required).
+   Talks to the FastAPI backend served from the same origin.
+   ========================================================================= */
+
+const API_BASE = ''; // same origin as backend
+
+const state = {
+  token: localStorage.getItem('mc_token') || null,
+  role: localStorage.getItem('mc_role') || null,
+  fullName: localStorage.getItem('mc_full_name') || null,
+  userId: localStorage.getItem('mc_user_id') || null,
+  view: 'home',
+  patientTab: 'book',
+  doctorTab: 'appointments',
+  adminTab: 'analytics',
+  bookingFlow: { specialty: null, doctors: [], selectedDoctor: null, day: null, slots: [] },
+  aiResult: null,
+  notifications: [],
+  notifPanelOpen: false,
+  resetToken: null,
+  calendarWeekOffset: 0,
+  adminUserSearch: '',
+  adminUserRole: '',
+};
+
+function saveSession(data) {
+  state.token = data.access_token;
+  state.role = data.role;
+  state.fullName = data.full_name;
+  state.userId = data.user_id;
+  localStorage.setItem('mc_token', data.access_token);
+  localStorage.setItem('mc_role', data.role);
+  localStorage.setItem('mc_full_name', data.full_name);
+  localStorage.setItem('mc_user_id', data.user_id);
+}
+
+function logout() {
+  state.token = null; state.role = null; state.fullName = null; state.userId = null;
+  localStorage.clear();
+  state.view = 'home';
+  route();
+}
+
+function toast(msg, kind) {
+  const el = document.createElement('div');
+  const colors = kind === 'error' ? 'bg-danger' : (kind === 'success' ? 'bg-success' : 'bg-ink');
+  el.className = `${colors} text-white px-4 py-3 rounded-lg shadow-lg text-sm fade-in max-w-xs`;
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3800);
+}
+
+async function api(path, method = 'GET', body = null, auth = true) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (auth && state.token) headers['Authorization'] = 'Bearer ' + state.token;
+  const res = await fetch(API_BASE + path, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* no json body */ }
+  if (res.status === 401 && auth && state.token) {
+    // ტოკენი ვადაგასულია/არასწორია — სესია სუფთად ვასუფთავებთ და login-ზე ვაბრუნებთ
+    state.token = null; state.role = null; state.fullName = null; state.userId = null;
+    localStorage.clear();
+    toast('სესიის ვადა ამოიწურა, გთხოვთ ხელახლა შეხვიდეთ', 'error');
+    state.view = 'login';
+    route();
+    throw new Error('სესია ამოიწურა');
+  }
+  if (!res.ok) {
+    const detail = (data && data.detail) ? data.detail : 'დაფიქსირდა შეცდომა';
+    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+  }
+  return data;
+}
+
+async function downloadPrescription(appointmentId) {
+  try {
+    const res = await fetch(`${API_BASE}/appointments/${appointmentId}/prescription/pdf`, {
+      headers: { 'Authorization': 'Bearer ' + state.token },
+    });
+    if (!res.ok) throw new Error('რეცეპტის ჩამოტვირთვა ვერ მოხერხდა');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `prescription_${appointmentId}.pdf`;
+    document.body.appendChild(a); a.click(); a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ------------------------------ Notifications --------------------------- */
+
+async function loadNotifications() {
+  if (!state.token) return;
+  try {
+    state.notifications = await api('/notifications/me');
+  } catch (e) { /* silent */ }
+}
+
+function notifTypeIcon(type) {
+  return {
+    appointment_confirmed: 'calendar-check',
+    appointment_cancelled: 'calendar-x',
+    prescription_added: 'file-text',
+    review_added: 'star',
+    reminder: 'alarm-clock',
+  }[type] || 'bell';
+}
+
+function toggleNotifPanel() {
+  state.notifPanelOpen = !state.notifPanelOpen;
+  renderNotifPanel();
+}
+
+function renderNotifPanel() {
+  const panel = document.getElementById('notif-panel');
+  if (!panel) return;
+  if (!state.notifPanelOpen) { panel.classList.add('hidden'); return; }
+  panel.classList.remove('hidden');
+  const unread = state.notifications.filter(n => !n.is_read).length;
+  panel.innerHTML = `
+    <div class="flex items-center justify-between px-4 py-3 border-b border-border">
+      <span class="font-semibold text-sm">შეტყობინებები</span>
+      ${unread ? `<button class="text-xs text-primary font-medium" onclick="markAllNotificationsRead()">ყველას წაკითხვა</button>` : ''}
+    </div>
+    <div class="max-h-80 overflow-y-auto">
+      ${state.notifications.length ? state.notifications.map(n => `
+        <div class="px-4 py-3 border-b border-border last:border-0 flex gap-2 items-start ${n.is_read ? '' : 'bg-primary/5'} cursor-pointer" onclick="markNotificationRead(${n.id})">
+          <span class="mt-0.5" style="color:${n.is_read ? '#6B7A78' : '#0F766E'}">${icon(notifTypeIcon(n.type), 'w-4 h-4')}</span>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs ${n.is_read ? 'text-muted' : 'text-ink font-medium'}">${escapeHtml(n.message)}</p>
+            <p class="text-[10px] text-muted mt-1">${new Date(n.created_at).toLocaleString('ka-GE', {dateStyle:'medium', timeStyle:'short'})}</p>
+          </div>
+        </div>`).join('') : `<div class="px-4 py-6 text-center text-muted text-sm">შეტყობინებები ჯერ არ არის.</div>`}
+    </div>`;
+  refreshIcons();
+}
+
+async function markNotificationRead(id) {
+  const n = state.notifications.find(x => x.id === id);
+  if (n && !n.is_read) {
+    n.is_read = true;
+    renderNotifPanel();
+    renderNotifBellBadge();
+    try { await api(`/notifications/${id}/read`, 'PUT'); } catch (e) { /* silent */ }
+  }
+}
+
+async function markAllNotificationsRead() {
+  state.notifications.forEach(n => n.is_read = true);
+  renderNotifPanel();
+  renderNotifBellBadge();
+  try { await api('/notifications/read-all', 'PUT'); } catch (e) { /* silent */ }
+}
+
+function renderNotifBellBadge() {
+  const badge = document.getElementById('notif-badge');
+  if (!badge) return;
+  const unread = state.notifications.filter(n => !n.is_read).length;
+  badge.classList.toggle('hidden', unread === 0);
+  badge.textContent = unread > 9 ? '9+' : String(unread);
+}
+
+/* ---------------------------- Layout shell ---------------------------- */
+
+function heartbeatSvg(cls) {
+  return `<svg class="${cls}" viewBox="0 0 400 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path class="heartbeat-path" d="M0 30 H130 L150 10 L170 50 L190 5 L210 55 L230 30 H400"
+      stroke="#0F766E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+function navBar() {
+  const authed = !!state.token;
+  return `
+  <header class="border-b border-border bg-surface/80 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2 cursor-pointer" onclick="goHome()">
+        <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-display font-bold">M</div>
+        <span class="display text-lg font-semibold tracking-tight">MediCare</span>
+      </div>
+      <nav class="flex items-center gap-2 sm:gap-3 text-sm">
+        <button class="w-9 h-9 rounded-lg border border-border hover:bg-paper transition flex items-center justify-center theme-toggle-icon" onclick="toggleTheme()" title="თემის შეცვლა">
+          <span class="sun">${icon('sun', 'w-4 h-4')}</span>
+          <span class="moon">${icon('moon', 'w-4 h-4')}</span>
+        </button>
+        ${authed ? `
+          <span class="text-muted hidden md:inline">გამარჯობა, <b class="text-ink">${escapeHtml(state.fullName)}</b> <span class="badge bg-primary/10 text-primary ml-1">${roleLabel(state.role)}</span></span>
+          <div class="relative">
+            <button class="w-9 h-9 rounded-lg border border-border hover:bg-paper transition flex items-center justify-center relative" onclick="toggleNotifPanel()">
+              ${icon('bell', 'w-4 h-4')}
+              <span id="notif-badge" class="hidden absolute -top-1.5 -right-1.5 bg-clay text-white text-[10px] leading-none rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">0</span>
+            </button>
+            <div id="notif-panel" class="hidden absolute right-0 mt-2 w-80 max-w-[90vw] bg-surface border border-border rounded-xl shadow-lg z-50 fade-in"></div>
+          </div>
+          <button class="px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-primaryDark transition flex items-center gap-1.5" onclick="goDashboard()">${icon('layout-dashboard')}<span class="hidden sm:inline">დაშბორდი</span></button>
+          <button class="px-3 py-1.5 rounded-lg border border-border hover:bg-paper transition flex items-center gap-1.5" onclick="logout()">${icon('log-out')}<span class="hidden sm:inline">გასვლა</span></button>
+        ` : `
+          <button class="px-3 py-1.5 rounded-lg hover:bg-paper transition" onclick="setView('login')">შესვლა</button>
+          <button class="px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-primaryDark transition" onclick="setView('register')">რეგისტრაცია</button>
+        `}
+      </nav>
+    </div>
+  </header>`;
+}
+
+function toggleTheme() {
+  const isDark = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('mc_theme', isDark ? 'dark' : 'light');
+  refreshChartsTheme();
+}
+
+function chartTextColor() {
+  return document.documentElement.classList.contains('dark') ? '#C7D6D1' : '#6B7A78';
+}
+function chartGridColor() {
+  return document.documentElement.classList.contains('dark') ? '#2B3833' : '#E4DFD4';
+}
+function refreshChartsTheme() {
+  // მიმდინარე გვერდზე გრაფიკები ხელახლა რენდერდება, რომ ტექსტის/ბადრის ფერი შესაბამებოდეს თემას
+  if (state.view === 'admin' && state.adminTab === 'analytics') route();
+}
+
+function roleLabel(role) {
+  return { patient: 'პაციენტი', doctor: 'ექიმი', admin: 'ადმინი' }[role] || role;
+}
+function statusLabel(s) {
+  return { scheduled: 'დაგეგმილი', completed: 'დასრულებული', cancelled: 'გაუქმებული' }[s] || s;
+}
+function statusBadgeClass(s) {
+  return { scheduled: 'bg-primary/10 text-primary', completed: 'bg-success/10 text-success', cancelled: 'bg-danger/10 text-danger' }[s] || '';
+}
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+/* ---------------------------- Icons & visuals ---------------------------- */
+
+const SPECIALTY_META = {
+  'კარდიოლოგი':        { icon: 'heart-pulse',   color: '#C0392B' },
+  'დერმატოლოგი':       { icon: 'sparkles',      color: '#B8860B' },
+  'ნევროლოგი':         { icon: 'brain',         color: '#6D28D9' },
+  'ოჯახის ექიმი':      { icon: 'stethoscope',   color: '#0F766E' },
+  'გასტროენტეროლოგი':  { icon: 'pill',          color: '#B45309' },
+  'პულმონოლოგი':       { icon: 'wind',          color: '#0E7490' },
+  'ორთოპედი':          { icon: 'bone',          color: '#334155' },
+  'პედიატრი':          { icon: 'baby',          color: '#DB2777' },
+  'ოტორინოლარინგოლოგი': { icon: 'ear',          color: '#0284C7' },
+};
+function specialtyMeta(name) {
+  return SPECIALTY_META[name] || { icon: 'stethoscope', color: '#0F766E' };
+}
+/* ---------- Self-contained icon set (no external CDN / network calls) ---------- */
+const ICONS = {
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 6 2 8 2 8H4s2-2 2-8"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+  'layout-dashboard': '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+  'log-out': '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
+  'user-plus': '<circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-7 7-7s7 3 7 7"/><path d="M19 8v6M22 11h-6"/>',
+  stethoscope: '<path d="M5 3v6a4 4 0 0 0 8 0V3"/><path d="M9 15a6 6 0 0 0 6-6"/><circle cx="19" cy="16.5" r="2.5"/>',
+  sparkles: '<path d="M12 3l1.6 4.8L18 9.5l-4.4 1.7L12 16l-1.6-4.8L6 9.5l4.4-1.7L12 3z"/><path d="M5 17l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z"/>',
+  'layout-grid': '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6"/><circle cx="17.5" cy="9" r="3"/><path d="M15 14.3c2.6.7 4.3 2.8 4.3 5.7"/>',
+  banknote: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 10h.01M18 14h.01"/>',
+  'calendar-plus': '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M12 14v6M9 17h6"/>',
+  'calendar-clock': '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><circle cx="14.5" cy="16" r="3.6"/><path d="M14.5 14.3v1.9l1.3.8"/>',
+  'calendar-off': '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M4 4l16 16"/>',
+  'calendar-check': '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M9 15.5l2 2 4-4.5"/>',
+  'calendar-x': '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M9.5 14.5l5 5M14.5 14.5l-5 5"/>',
+  history: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2.5"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  'search-x': '<circle cx="10" cy="10" r="6.5"/><path d="M20 20l-4.4-4.4"/><path d="M8 8l4 4M12 8l-4 4"/>',
+  download: '<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/>',
+  'user-round-cog': '<circle cx="10" cy="8" r="4"/><path d="M2.5 21c0-4 3.3-7 7.5-7"/><circle cx="18" cy="17.5" r="2.7"/><path d="M18 13.7v1M18 20.3v1M14.7 15.6l.9.5M20.4 18.9l.9.5M14.7 19.4l.9-.5M20.4 16.1l.9-.5"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/>',
+  inbox: '<path d="M3 12h4.5l1.8 3h5.4l1.8-3H21"/><path d="M5.5 12L4 5h16l-1.5 7"/><path d="M4 12v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/>',
+  'user-round': '<circle cx="12" cy="8" r="4.2"/><path d="M4 21c0-4.5 3.6-8 8-8s8 3.5 8 8"/>',
+  'pie-chart': '<circle cx="12" cy="12" r="9"/><path d="M12 3v9h9"/>',
+  'file-clock': '<path d="M8 3h6l4 4v14a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><circle cx="12" cy="15" r="3.4"/><path d="M12 13.3v1.9l1.3.8"/>',
+  'calendar-check2': '',
+  'file-text': '<path d="M8 3h6l4 4v14a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M9 12.5h6M9 16h6M9 8.5h2"/>',
+  star: '<path d="M12 2.5l2.9 6.1 6.6.7-4.9 4.6 1.3 6.6L12 17l-5.9 3.5 1.3-6.6-4.9-4.6 6.6-.7L12 2.5z"/>',
+  'alarm-clock': '<circle cx="12" cy="13.5" r="8"/><path d="M12 9.5v4l3 2"/><path d="M5 3.5L2.5 6M19 3.5L21.5 6"/>',
+  'heart-pulse': '<path d="M19.5 8.5c0-2.6-2-4.6-4.5-4.6-1.6 0-3 .9-3.5 2.1-.5-1.2-1.9-2.1-3.5-2.1-2.5 0-4.5 2-4.5 4.6 0 4.4 8 10.4 8 10.4s8-6 8-10.4z"/><path d="M5.5 12h2.7l1.3-2.6 1.8 4.5 1.3-1.9h2.9"/>',
+  brain: '<path d="M9 4a2.6 2.6 0 0 0-2.5 2.6c-1.4.2-2.5 1.4-2.5 2.9 0 .7.3 1.4.7 1.9-.7.5-1.2 1.4-1.2 2.4 0 1.5 1.1 2.7 2.5 2.9A2.6 2.6 0 0 0 9 19"/><path d="M15 4a2.6 2.6 0 0 1 2.5 2.6c1.4.2 2.5 1.4 2.5 2.9 0 .7-.3 1.4-.7 1.9.7.5 1.2 1.4 1.2 2.4 0 1.5-1.1 2.7-2.5 2.9A2.6 2.6 0 0 1 15 19"/><path d="M9 4v15M15 4v15"/>',
+  pill: '<rect x="2.5" y="9" width="19" height="6" rx="3"/><path d="M12 9v6"/>',
+  wind: '<path d="M3 8h11.5a2.7 2.7 0 1 0-2.7-2.7"/><path d="M3 16h14.5a2.7 2.7 0 1 1-2.7 2.7"/><path d="M3 12h9"/>',
+  bone: '<path d="M17 6.5a2.3 2.3 0 1 0-3.2 3.2L7.7 15.8a2.3 2.3 0 1 0-3.2 3.2 2.3 2.3 0 0 0 3.2 0l6.1-6.1a2.3 2.3 0 0 0 3.2-3.2 2.3 2.3 0 0 0 0-3.2z"/>',
+  baby: '<circle cx="12" cy="7" r="4"/><path d="M8 13.5c0 3 1.8 5 4 5s4-2 4-5"/><path d="M9.3 20.3c.9-.8 1.7-.8 2.7-.8s1.8 0 2.7.8"/>',
+  ear: '<path d="M8.5 13.5a6 6 0 1 1 8-8c2 2 2.2 5 .3 7-1 1-1.3 2-1.3 3.2a3 3 0 0 1-6 0"/>',
+  'arrow-left': '<path d="M19 12H5"/><path d="M11 18l-6-6 6-6"/>',
+  x: '<path d="M18 6L6 18"/><path d="M6 6l12 12"/>',
+  siren: '<path d="M12 3l9 16H3L12 3z"/><path d="M12 10v4"/><path d="M12 16.5h.01"/>',
+  'shield-check': '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4.5"/>',
+  bot: '<rect x="4" y="8" width="16" height="11" rx="2.5"/><circle cx="9" cy="13.7" r="1.2"/><circle cx="15" cy="13.7" r="1.2"/><path d="M12 8V4.5"/><circle cx="12" cy="3" r="1.1"/><path d="M2 12.5h2M20 12.5h2"/>',
+  send: '<path d="M21.5 2.5L10.5 13.5"/><path d="M21.5 2.5l-7 19-4-8-8-4 19-7z"/>',
+  'thumbs-up': '<path d="M7 21.5V10.5l4.7-8 1 .8v5.9h5.8a2 2 0 0 1 2 2.4l-1.7 7.3a2 2 0 0 1-2 1.6H7z"/><path d="M3 10.5h4v11H3z"/>',
+  trophy: '<path d="M8 21h8M12 17.5v3.5"/><path d="M7 3.5h10v4.5a5 5 0 0 1-10 0V3.5z"/><path d="M7 4.5H4.3a2 2 0 0 0 0 4H7M17 4.5h2.7a2 2 0 0 1 0 4H17"/>',
+  activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  mail: '<rect x="2" y="4.5" width="20" height="15" rx="2"/><path d="M2.5 6.5l9.5 7 9.5-7"/>',
+  check: '<path d="M20 6.5L9 17.5l-5-5"/>',
+  lock: '<rect x="4" y="10.5" width="16" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+  'chevron-right': '<path d="M9 6l6 6-6 6"/>',
+  'chevron-down': '<path d="M6 9l6 6 6-6"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  heart: '<path d="M19.5 8.5c0-2.6-2-4.6-4.5-4.6-1.6 0-3 .9-3.5 2.1-.5-1.2-1.9-2.1-3.5-2.1-2.5 0-4.5 2-4.5 4.6 0 4.4 8 10.4 8 10.4s8-6 8-10.4z"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 8h.01"/>',
+  sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.4M12 19.1v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/>',
+  moon: '<path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/>',
+  wind2: '<path d="M3 8h11.5a2.7 2.7 0 1 0-2.7-2.7"/>',
+  'map-pin': '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+};
+
+function icon(name, cls) {
+  const path = ICONS[name] || ICONS.info;
+  return `<svg class="icon-svg ${cls || ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+}
+
+const AVATAR_PALETTE = ['#0F766E', '#D97757', '#6D28D9', '#B45309', '#0E7490', '#C0392B', '#DB2777', '#334155'];
+function initialsOf(name) {
+  const parts = (name || '?').trim().split(/\s+/);
+  const first = parts[0] ? parts[0][0] : '';
+  const second = parts.length > 1 ? parts[1][0] : '';
+  return (first + second).toUpperCase() || '?';
+}
+function avatarDataUri(seedId, name, hexColor) {
+  const initials = initialsOf(name);
+  const color = hexColor || AVATAR_PALETTE[Math.abs(seedId) % AVATAR_PALETTE.length];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="150" height="150" viewBox="0 0 150 150">
+    <defs><linearGradient id="g${seedId}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${color}"/><stop offset="100%" stop-color="${color}" stop-opacity="0.75"/>
+    </linearGradient></defs>
+    <rect width="150" height="150" rx="75" fill="url(#g${seedId})"/>
+    <text x="75" y="87" font-family="Inter, sans-serif" font-size="52" font-weight="600" fill="white" text-anchor="middle">${initials}</text>
+  </svg>`;
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+}
+function doctorAvatarUrl(doctorId, name, hexColor) {
+  return avatarDataUri(doctorId, name, hexColor);
+}
+function refreshIcons() { /* icons are inline SVG now — no post-processing needed */ }
+function emptyState(message, iconName) {
+  return `<div class="empty-state bg-surface border border-border rounded-xl p-10 text-center text-muted flex flex-col items-center gap-3">
+    <span class="text-muted/50">${icon(iconName || 'inbox', 'w-12 h-12')}</span>
+    <p class="text-sm">${escapeHtml(message)}</p>
+  </div>`;
+}
+
+function shell(innerHtml) {
+  document.getElementById('app').innerHTML = navBar() + `<main class="max-w-6xl mx-auto px-5 py-8">${innerHtml}</main>` + footer();
+  refreshIcons();
+  if (state.token) {
+    renderNotifBellBadge();
+    loadNotifications().then(() => { renderNotifBellBadge(); renderNotifPanel(); });
+  }
+}
+
+function footer() {
+  return `<footer class="border-t border-border mt-16 py-8 text-center text-xs text-muted">
+    MediCare Clinic Appointment System — საბაკალავრო პრაქტიკული პროექტი, ${new Date().getFullYear()}
+  </footer>`;
+}
+
+function goHome() { state.view = 'home'; route(); }
+function goDashboard() {
+  if (state.role === 'patient') state.view = 'patient';
+  else if (state.role === 'doctor') state.view = 'doctor';
+  else if (state.role === 'admin') state.view = 'admin';
+  route();
+}
+function setView(v) { state.view = v; route(); }
+
+/* ------------------------------- Router -------------------------------- */
+/* SPA history: every successful route() render pushes a browser history
+   entry carrying a snapshot of the nav-relevant state, so the browser's
+   Back/Forward buttons move between in-app screens instead of leaving the
+   app or forcing a re-login. */
+
+function navSnapshot() {
+  return {
+    view: state.view,
+    patientTab: state.patientTab,
+    doctorTab: state.doctorTab,
+    adminTab: state.adminTab,
+    bookingFlow: state.bookingFlow,
+  };
+}
+
+window.addEventListener('popstate', (ev) => {
+  if (ev.state) {
+    Object.assign(state, ev.state);
+    route(true);
+  } else {
+    state.view = 'home';
+    route(true);
+  }
+});
+
+async function route(fromPopState) {
+  if (!state.token && ['patient', 'doctor', 'admin'].includes(state.view)) {
+    state.view = 'login';
+  }
+  // ავტორიზებული მომხმარებელი ვერ დაბრუნდება login/register/forgot/reset გვერდებზე —
+  // ავტომატურად გადამისამართდება საკუთარ დაშბორდზე (ისევე, როგორც ნამდვილ საიტებზე)
+  if (state.token && ['login', 'register', 'forgot', 'reset'].includes(state.view)) {
+    if (state.role === 'patient') state.view = 'patient';
+    else if (state.role === 'doctor') state.view = 'doctor';
+    else if (state.role === 'admin') state.view = 'admin';
+    else state.view = 'home';
+  }
+  try {
+    switch (state.view) {
+      case 'home': await renderHome(); break;
+      case 'login': await renderLogin(); break;
+      case 'forgot': await renderForgotPassword(); break;
+      case 'reset': await renderResetPassword(); break;
+      case 'register': await renderRegister(); break;
+      case 'patient': await renderPatient(); break;
+      case 'doctor': await renderDoctor(); break;
+      case 'admin': await renderAdmin(); break;
+      default: await renderHome(); break;
+    }
+  } catch (e) {
+    shell(`<div class="max-w-lg mx-auto text-center py-16">
+      <div class="text-danger mb-3">${icon('info', 'w-8 h-8 mx-auto')}</div>
+      <p class="text-danger font-medium mb-4">${escapeHtml(e.message)}</p>
+      <button class="px-4 py-2 rounded-lg bg-primary text-white text-sm" onclick="goHome()">მთავარ გვერდზე დაბრუნება</button>
+    </div>`);
+  }
+  if (!fromPopState) {
+    const snap = navSnapshot();
+    if (!window.__mcHistInit) {
+      window.__mcHistInit = true;
+      history.replaceState(snap, '');
+    } else {
+      history.pushState(snap, '');
+    }
+  }
+}
+
+/* -------------------------------- Home ---------------------------------- */
+
+async function renderHome() {
+  let specialties = [];
+  let doctors = [];
+  try {
+    specialties = await api('/doctors/specialties', 'GET', null, false);
+    doctors = await api('/doctors', 'GET', null, false);
+  } catch (e) { /* backend might not be running yet */ }
+
+  shell(`
+    <section class="relative">
+      <div class="decorative-blob w-72 h-72 -top-10 -left-16" style="background:#0F766E"></div>
+      <div class="decorative-blob w-64 h-64 top-20 right-0" style="background:#D97757"></div>
+      <div class="grid md:grid-cols-2 gap-10 items-center py-6 fade-in relative z-10">
+        <div>
+          <p class="uppercase tracking-widest text-xs text-clay font-semibold mb-3">ჩაწერის სისტემა · AI ასისტენტით</p>
+          <h1 class="display text-4xl md:text-5xl font-semibold leading-tight mb-5">ჩაეწერეთ ექიმთან<br/>რამდენიმე წუთში</h1>
+          <p class="text-muted text-lg mb-6 max-w-md">აღწერეთ სიმპტომები, მიიღეთ სპეციალობის რეკომენდაცია და გადაუდებლობის შეფასება AI ასისტენტისგან, და დაჯავშნეთ თავისუფალი დრო — უშუალოდ კონფლიქტების გარეშე.</p>
+          <div class="flex flex-wrap gap-3">
+            <button class="px-5 py-3 rounded-xl grad-primary text-white font-medium hover:opacity-90 transition flex items-center gap-2 shadow-lg shadow-primary/20" onclick="setView('register')">${icon('user-plus')}დაწყება</button>
+            <button class="px-5 py-3 rounded-xl border border-border font-medium hover:bg-surface transition flex items-center gap-2" onclick="document.getElementById('ai-widget').scrollIntoView({behavior:'smooth'})">${icon('stethoscope')}სიმპტომების შემოწმება</button>
+          </div>
+        </div>
+        <div class="hero-photo rounded-2xl p-6 relative overflow-hidden min-h-[260px] flex flex-col justify-end shadow-xl">
+          <div class="relative z-10">
+            ${heartbeatSvg('w-full h-14 mb-4 opacity-90')}
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div class="p-3 rounded-xl bg-white/90 backdrop-blur"><div class="text-2xl font-display font-semibold text-primary">${doctors.length}</div><div class="text-muted">აქტიური ექიმი</div></div>
+              <div class="p-3 rounded-xl bg-white/90 backdrop-blur"><div class="text-2xl font-display font-semibold text-primary">${specialties.length}</div><div class="text-muted">სპეციალობა</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mt-14 grid sm:grid-cols-3 gap-4">
+      <div class="bg-surface border border-border rounded-xl p-5 card-hover">
+        <div class="w-10 h-10 rounded-lg grad-primary flex items-center justify-center text-white mb-3">${icon('siren', 'w-5 h-5')}</div>
+        <h3 class="font-semibold mb-1 text-sm">გადაუდებლობის შეფასება</h3>
+        <p class="text-xs text-muted">AI ავტომატურად აფასებს სიმპტომების სიმძიმეს და გირჩევთ — გეგმიური ვიზიტია საჭირო თუ სასწრაფო დახმარება.</p>
+      </div>
+      <div class="bg-surface border border-border rounded-xl p-5 card-hover">
+        <div class="w-10 h-10 rounded-lg grad-clay flex items-center justify-center text-white mb-3">${icon('trophy', 'w-5 h-5')}</div>
+        <h3 class="font-semibold mb-1 text-sm">ჭკვიანი ექიმის შერჩევა</h3>
+        <p class="text-xs text-muted">რეკომენდებული ექიმები ავტომატურად ლაგდება რეიტინგის, გამოცდილებისა და ფასის ოპტიმალური თანაფარდობით.</p>
+      </div>
+      <div class="bg-surface border border-border rounded-xl p-5 card-hover">
+        <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white mb-3" style="background:#6D28D9">${icon('activity', 'w-5 h-5')}</div>
+        <h3 class="font-semibold mb-1 text-sm">შეფასებების ანალიზი</h3>
+        <p class="text-xs text-muted">პაციენტების კომენტარები ავტომატურად სენტიმენტ-ანალიზდება ადმინისტრაციისთვის ხარისხის მონიტორინგისთვის.</p>
+      </div>
+    </section>
+
+    <section id="ai-widget" class="mt-14 bg-surface border border-border rounded-2xl p-6 md:p-8 fade-in relative overflow-hidden">
+      <div class="decorative-blob w-56 h-56 -bottom-20 -right-10" style="background:#D97757"></div>
+      <div class="relative z-10">
+        <h2 class="display text-2xl font-semibold mb-1 flex items-center gap-2">${icon('bot', 'text-clay')}AI სიმპტომების ასისტენტი</h2>
+        <p class="text-muted mb-4 text-sm">აღწერეთ როგორ გრძნობთ თავს — სისტემა შემოგთავაზებთ შესაბამის სპეციალობასა და გადაუდებლობის დონეს (rule-based keyword-matching მოდელი).</p>
+        <div class="flex flex-col md:flex-row gap-3">
+          <textarea id="symptom-input" rows="2" placeholder="მაგ: მაქვს ძლიერი თავის ტკივილი და თავბრუსხვევა..." class="flex-1 border border-border rounded-xl px-4 py-3 text-sm bg-paper"></textarea>
+          <button class="px-5 py-3 rounded-xl grad-clay text-white font-medium hover:opacity-90 transition h-fit flex items-center gap-2" onclick="runAiCheck()">${icon('send', 'w-4 h-4')}რეკომენდაცია</button>
+        </div>
+        <p class="text-xs text-muted mt-3 mb-1.5">ან მონიშნეთ ცნობილი სიმპტომი, რომ ტექსტი ავტომატურად დაემატოს:</p>
+        <div id="symptom-chips-home" class="flex flex-wrap gap-1.5 mb-3"></div>
+        ${bodyMapWidget('symptom-input', 'home')}
+        <div id="ai-result" class="mt-5"></div>
+        <div id="health-tip-widget" class="mt-5"></div>
+      </div>
+    </section>
+
+    <section class="mt-14">
+      <h2 class="display text-2xl font-semibold mb-5 flex items-center gap-2">${icon('layout-grid', 'text-primary')}სპეციალობები</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        ${specialties.map(specialtyCard).join('') || emptyState('სპეციალობები ჯერ არ არის დამატებული.', 'layout-grid')}
+      </div>
+    </section>
+
+    <section class="mt-14">
+      <h2 class="display text-2xl font-semibold mb-5 flex items-center gap-2">${icon('users', 'text-primary')}ჩვენი ექიმები</h2>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        ${doctors.map(doctorCard).join('') || emptyState('ექიმები ჯერ არ არის დამატებული (გაუშვით python seed.py).', 'user-round')}
+      </div>
+    </section>
+  `);
+  loadSymptomChips('symptom-chips-home', 'symptom-input');
+  renderHealthTipWidget('health-tip-widget');
+}
+
+/* ------------------------- AI helper widgets ------------------------- */
+
+let symptomOptionsCache = null;
+async function loadSymptomChips(containerId, textareaId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  try {
+    if (!symptomOptionsCache) symptomOptionsCache = await api('/ai/symptoms', 'GET', null, false);
+    container.innerHTML = symptomOptionsCache.map(s => `
+      <button type="button" class="px-2.5 py-1 rounded-full border border-border text-xs hover:border-primary hover:text-primary hover:bg-primary/5 transition" onclick="addSymptomChip('${textareaId}', '${escapeHtml(s.text)}')">+ ${escapeHtml(s.label)}</button>
+    `).join('');
+  } catch (e) { /* silent — optional enhancement */ }
+}
+
+function addSymptomChip(textareaId, text) {
+  const el = document.getElementById(textareaId);
+  if (!el) return;
+  const current = el.value.trim();
+  if (current.toLowerCase().includes(text.toLowerCase())) return;
+  el.value = current ? `${current}, ${text}` : text;
+  el.focus();
+}
+
+/* ------------------------------ Body map ------------------------------ */
+
+const BODY_HOTSPOTS = [
+  { cx: 100, cy: 40, r: 22, color: '#6D28D9', label: 'თავი — ნევროლოგი', text: 'თავის ტკივილი' },
+  { cx: 100, cy: 69, r: 10, color: '#0284C7', label: 'ყელი — ოტორინოლარინგოლოგი', text: 'ყელის ტკივილი' },
+  { cx: 100, cy: 111, r: 16, color: '#C0392B', label: 'გული — კარდიოლოგი', text: 'გულმკერდის ტკივილი' },
+  { cx: 74, cy: 116, r: 14, color: '#0E7490', label: 'მარცხენა ფილტვი — პულმონოლოგი', text: 'ხანგრძლივი ხველა' },
+  { cx: 126, cy: 116, r: 14, color: '#0E7490', label: 'მარჯვენა ფილტვი — პულმონოლოგი', text: 'ხანგრძლივი ხველა' },
+  { cx: 100, cy: 183, r: 23, color: '#B45309', label: 'მუცელი — გასტროენტეროლოგი', text: 'მუცლის ტკივილი' },
+  { cx: 38, cy: 148, r: 13, color: '#334155', label: 'მარცხენა ხელი — ორთოპედი', text: 'სახსრის ტკივილი' },
+  { cx: 162, cy: 148, r: 13, color: '#334155', label: 'მარჯვენა ხელი — ორთოპედი', text: 'სახსრის ტკივილი' },
+  { cx: 78, cy: 300, r: 15, color: '#334155', label: 'მარცხენა ფეხი — ორთოპედი', text: 'მუხლის ტკივილი' },
+  { cx: 122, cy: 300, r: 15, color: '#334155', label: 'მარჯვენა ფეხი — ორთოპედი', text: 'მუხლის ტკივილი' },
+];
+
+function bodyMapWidget(textareaId, uid) {
+  const svgHotspots = BODY_HOTSPOTS.map((h, i) => `
+    <circle class="bodymap-hotspot" style="color:${h.color}" cx="${h.cx}" cy="${h.cy}" r="${h.r}"
+      onmouseenter="bodyMapHover(event, '${uid}', '${escapeHtml(h.label)}')" onmouseleave="bodyMapOut('${uid}')"
+      onclick="addSymptomChip('${textareaId}', '${escapeHtml(h.text)}')"></circle>`).join('');
+  return `
+    <button type="button" class="w-full py-2 mb-3 rounded-lg border-2 border-dashed border-primary/40 text-primary text-sm font-medium flex items-center justify-center gap-2 hover:bg-primary/5 hover:border-primary transition" onclick="toggleBodyMap('${uid}')">
+      ${icon('map-pin', 'w-4 h-4')}<span id="bodymap-toggle-label-${uid}">🧍 სხეულის რუკით სიმპტომის არჩევა</span>
+    </button>
+    <div id="bodymap-${uid}" class="hidden relative bg-paper border border-border rounded-xl p-4 mb-3 fade-in">
+      <div id="bodymap-label-${uid}" class="bodymap-label"></div>
+      <div class="flex flex-col sm:flex-row gap-4 items-center">
+        <svg viewBox="0 0 200 400" class="w-40 h-80 shrink-0" xmlns="http://www.w3.org/2000/svg">
+          <circle class="bodymap-shape" cx="100" cy="40" r="24"/>
+          <rect class="bodymap-shape" x="91" y="60" width="18" height="18"/>
+          <rect class="bodymap-shape" x="55" y="78" width="90" height="145" rx="24"/>
+          <rect class="bodymap-shape" x="28" y="82" width="22" height="138" rx="11"/>
+          <rect class="bodymap-shape" x="150" y="82" width="22" height="138" rx="11"/>
+          <rect class="bodymap-shape" x="62" y="220" width="32" height="165" rx="16"/>
+          <rect class="bodymap-shape" x="106" y="220" width="32" height="165" rx="16"/>
+          ${svgHotspots}
+        </svg>
+        <div class="text-xs text-muted flex-1">
+          <p class="mb-2">დააჭირეთ სხეულის იმ ადგილს, სადაც ტკივილს/დისკომფორტს გრძნობთ — ავტომატურად დაემატება სიმპტომების ველში. თითოეული წერტილი ფერით შეესაბამება სპეციალობას.</p>
+          <div class="flex flex-wrap gap-1.5">
+            <button type="button" class="px-2.5 py-1 rounded-full border border-border hover:border-primary hover:text-primary transition" onclick="addSymptomChip('${textareaId}', 'ზურგის ტკივილი')">+ ზურგი</button>
+            <button type="button" class="px-2.5 py-1 rounded-full border border-border hover:border-primary hover:text-primary transition" onclick="addSymptomChip('${textareaId}', 'კანის გამონაყარი')">+ კანი</button>
+            <button type="button" class="px-2.5 py-1 rounded-full border border-border hover:border-primary hover:text-primary transition" onclick="addSymptomChip('${textareaId}', 'ცხელება სისუსტე')">+ ზოგადი სისუსტე</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleBodyMap(uid) {
+  const el = document.getElementById(`bodymap-${uid}`);
+  const label = document.getElementById(`bodymap-toggle-label-${uid}`);
+  if (!el) return;
+  const hidden = el.classList.toggle('hidden');
+  if (label) label.textContent = hidden ? 'სხეულის რუკით არჩევა' : 'სხეულის რუკის დამალვა';
+}
+
+function bodyMapHover(ev, uid, label) {
+  ev.target.classList.add('active');
+  const el = document.getElementById(`bodymap-label-${uid}`);
+  if (!el) return;
+  el.textContent = label;
+  el.classList.add('show');
+  const svg = ev.target.ownerSVGElement;
+  const rect = svg.getBoundingClientRect();
+  const parentRect = svg.closest('.relative').getBoundingClientRect();
+  const pt = svg.createSVGPoint();
+  pt.x = ev.target.cx.baseVal.value; pt.y = ev.target.cy.baseVal.value;
+  const screenPt = pt.matrixTransform(ev.target.getScreenCTM());
+  el.style.left = (screenPt.x - parentRect.left) + 'px';
+  el.style.top = (screenPt.y - parentRect.top) + 'px';
+}
+
+function bodyMapOut(uid) {
+  document.querySelectorAll('.bodymap-hotspot.active').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(`bodymap-label-${uid}`);
+  if (el) el.classList.remove('show');
+}
+
+async function renderHealthTipWidget(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  try {
+    const [tip, aqi] = await Promise.all([
+      api('/health-tip', 'GET', null, false).catch(() => ({ available: false })),
+      api('/air-quality', 'GET', null, false).catch(() => ({ available: false })),
+    ]);
+    let html = '';
+    if (tip.available) {
+      const meta = tip.related_specialty ? specialtyMeta(tip.related_specialty) : { icon: 'info', color: '#0F766E' };
+      html += `
+        <div class="border rounded-xl p-4 flex items-start gap-3 mb-3" style="background:${meta.color}0D; border-color:${meta.color}33">
+          <span style="color:${meta.color}">${icon(meta.icon, 'w-5 h-5 mt-0.5')}</span>
+          <div class="text-sm">
+            <div class="font-medium mb-1 flex items-center gap-2">დღის ჯანმრთელობის რჩევა
+              <span class="text-xs text-muted font-normal">· ${escapeHtml(tip.location)}, ${Math.round(tip.temperature_c)}°C, ${escapeHtml(tip.condition)}</span>
+            </div>
+            <p class="text-ink/80">${escapeHtml(tip.tip)}</p>
+          </div>
+        </div>`;
+    }
+    if (aqi.available) {
+      html += `
+        <div class="border rounded-xl p-4 flex items-start gap-3" style="background:${aqi.color}0D; border-color:${aqi.color}33">
+          <span style="color:${aqi.color}">${icon('wind', 'w-5 h-5 mt-0.5')}</span>
+          <div class="text-sm flex-1">
+            <div class="font-medium mb-1 flex items-center gap-2 flex-wrap">ჰაერის ხარისხი — ${escapeHtml(aqi.location)}
+              <span class="badge" style="background:${aqi.color}22; color:${aqi.color}">AQI ${Math.round(aqi.us_aqi)} · ${escapeHtml(aqi.category)}</span>
+            </div>
+            <p class="text-ink/80 text-xs">PM2.5: ${aqi.pm2_5?.toFixed(1)} μg/m³ · PM10: ${aqi.pm10?.toFixed(1)} μg/m³ ${aqi.advice ? '· ' + escapeHtml(aqi.advice) : ''}</p>
+            <p class="text-[10px] text-muted mt-1">წყარო: Open-Meteo Air Quality API (საჯარო, რეალურ დროში)</p>
+          </div>
+        </div>`;
+    }
+    container.innerHTML = html;
+  } catch (e) { container.innerHTML = ''; }
+}
+
+function specialtyCard(name) {
+  const meta = specialtyMeta(name);
+  return `<button onclick="goSpecialty('${escapeHtml(name)}')" class="bg-surface border border-border rounded-xl p-4 flex flex-col items-center gap-2 text-center hover:shadow-md hover:-translate-y-0.5 transition">
+    <div class="w-11 h-11 rounded-full flex items-center justify-center" style="background:${meta.color}1A; color:${meta.color};">
+      ${icon(meta.icon, 'w-5 h-5')}
+    </div>
+    <span class="text-sm font-medium leading-tight">${escapeHtml(name)}</span>
+  </button>`;
+}
+
+function goSpecialty(name) {
+  if (!state.token) { toast('სპეციალობის დასათვალიერებლად საჭიროა შესვლა'); setView('login'); return; }
+  if (state.role !== 'patient') { toast('ჯავშნის გაკეთება მხოლოდ პაციენტებს შეუძლიათ'); return; }
+  state.view = 'patient';
+  state.patientTab = 'book';
+  route().then(() => selectSpecialty(name));
+}
+
+function ratingStars(avg, count) {
+  if (avg === null || avg === undefined || !count) {
+    return `<span class="text-xs text-muted">ჯერ არ არის შეფასებული</span>`;
+  }
+  const full = Math.round(avg);
+  let stars = '';
+  for (let i = 1; i <= 5; i++) {
+    stars += `<span style="color:${i <= full ? '#D97757' : '#E4DFD4'}">★</span>`;
+  }
+  return `<span class="text-sm">${stars}</span> <span class="text-xs text-muted">${avg.toFixed(1)} (${count})</span>`;
+}
+
+function favoriteStarBtn(d) {
+  if (state.role !== 'patient') return '';
+  const filled = !!d.is_favorite;
+  return `<button class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center hover:bg-clay/10 transition" style="color:${filled ? '#D97757' : '#C9C4B6'}" title="${filled ? 'რჩეულებიდან წაშლა' : 'რჩეულებში დამატება'}" onclick="event.stopPropagation(); toggleFavorite(${d.id}, ${filled})">${icon('star', 'w-5 h-5' + (filled ? '' : ''))}</button>`;
+}
+
+async function toggleFavorite(doctorId, isFavorite) {
+  if (!state.token) { toast('საჭიროა შესვლა'); setView('login'); return; }
+  try {
+    if (isFavorite) await api(`/favorites/${doctorId}`, 'DELETE');
+    else await api(`/favorites/${doctorId}`, 'POST');
+    toast(isFavorite ? 'რჩეულებიდან წაიშალა' : 'რჩეულებში დაემატა', 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function doctorCard(d) {
+  const meta = specialtyMeta(d.specialty);
+  return `<div class="bg-surface border border-border rounded-xl p-5 fade-in card-hover relative overflow-hidden">
+    <div class="absolute top-0 left-0 right-0 h-1" style="background:${meta.color}"></div>
+    <div class="flex items-start gap-3">
+      <img src="${doctorAvatarUrl(d.id, d.full_name, meta.color)}" alt="${escapeHtml(d.full_name)}" class="avatar-ring w-14 h-14 rounded-full object-cover shrink-0" style="--ring-color:${meta.color}" onerror="this.style.display='none'"/>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-semibold truncate">${escapeHtml(d.full_name)}</div>
+            <div class="text-sm flex items-center gap-1" style="color:${meta.color}">${icon(meta.icon, 'w-3.5 h-3.5')}${escapeHtml(d.specialty)}</div>
+          </div>
+          <div class="text-xs text-muted whitespace-nowrap">${d.years_experience} წელი</div>
+        </div>
+        <div class="mt-1">${ratingStars(d.avg_rating, d.review_count)}</div>
+      </div>
+      ${favoriteStarBtn(d)}
+    </div>
+    <p class="text-sm text-muted mt-2 line-clamp-3">${escapeHtml(d.bio || '')}</p>
+    <div class="flex items-center justify-between mt-4">
+      <span class="text-sm font-medium flex items-center gap-1">${icon('banknote', 'w-4 h-4 text-muted')}${d.consultation_fee}₾ / ვიზიტი</span>
+      <button class="text-sm px-3 py-1.5 rounded-lg grad-primary text-white hover:opacity-90 flex items-center gap-1.5" onclick="quickBook(${d.id}, '${escapeHtml(d.specialty)}')">${icon('calendar-plus', 'w-4 h-4')}დაჯავშნა</button>
+    </div>
+  </div>`;
+}
+
+function quickBook(doctorId, specialty) {
+  if (!state.token) { toast('ჯავშნისთვის საჭიროა შესვლა'); setView('login'); return; }
+  if (state.role !== 'patient') { toast('ჯავშნის გაკეთება მხოლოდ პაციენტებს შეუძლიათ'); return; }
+  state.view = 'patient';
+  state.patientTab = 'book';
+  route().then(() => selectDoctorForBooking(doctorId));
+}
+
+function urgencyMeta(level) {
+  return {
+    emergency: { label: 'გადაუდებელი', cls: 'urgency-emergency', icon: 'siren' },
+    urgent: { label: 'სასწრაფო', cls: 'urgency-urgent', icon: 'alarm-clock' },
+    routine: { label: 'გეგმიური', cls: 'urgency-routine', icon: 'shield-check' },
+  }[level] || { label: 'გეგმიური', cls: 'urgency-routine', icon: 'shield-check' };
+}
+function urgencyBanner(res) {
+  if (!res.urgency_level) return '';
+  const m = urgencyMeta(res.urgency_level);
+  return `<div class="border rounded-xl p-3 mb-3 flex items-start gap-2 ${m.cls}">
+    <span class="mt-0.5 ${res.urgency_level === 'emergency' ? 'pulse-dot' : ''}">${icon(m.icon, 'w-5 h-5')}</span>
+    <div class="text-sm"><b>${m.label}</b> — ${escapeHtml(res.urgency_advice || '')}</div>
+  </div>`;
+}
+
+function alternativesLine(res) {
+  if (!res.alternative_specialties || !res.alternative_specialties.length) return '';
+  return `<p class="text-xs text-muted mt-2">ასევე შეიძლება განიხილოთ: ${res.alternative_specialties.map(s => `<button class="underline hover:text-primary" onclick="goSpecialty('${escapeHtml(s)}')">${escapeHtml(s)}</button>`).join(', ')}</p>`;
+}
+
+async function runAiCheck() {
+  const text = document.getElementById('symptom-input').value.trim();
+  if (!text) { toast('გთხოვთ, აღწერეთ სიმპტომები'); return; }
+  const resultEl = document.getElementById('ai-result');
+  resultEl.innerHTML = `<p class="text-muted text-sm flex items-center gap-2">${icon('bot', 'w-4 h-4 animate-pulse')}ანალიზდება...</p>`;
+  try {
+    const res = await api('/ai/recommend', 'POST', { text }, false);
+    state.aiResult = res;
+    resultEl.innerHTML = `
+      <div class="border border-primary/30 bg-primary/5 rounded-xl p-4 fade-in">
+        ${urgencyBanner(res)}
+        <div class="flex items-center gap-2 mb-1">
+          <span class="badge bg-primary text-white">${escapeHtml(res.specialty)}</span>
+          <span class="text-xs text-muted">სანდოობა: ${Math.round(res.confidence*100)}%</span>
+        </div>
+        <p class="text-sm text-ink/80">${escapeHtml(res.reason)}</p>
+        ${alternativesLine(res)}
+        <div class="grid sm:grid-cols-2 gap-3 mt-4">
+          ${res.doctors.map(doctorCard).join('') || '<p class="text-sm text-muted">ამ სპეციალობაზე ამჟამად ექიმი არ არის დარეგისტრირებული.</p>'}
+        </div>
+      </div>`;
+  } catch (e) { resultEl.innerHTML = `<p class="text-danger text-sm">${escapeHtml(e.message)}</p>`; }
+}
+
+/* ----------------------------- Auth pages -------------------------------- */
+
+function renderLogin() {
+  shell(`
+    <div class="max-w-4xl mx-auto grid md:grid-cols-2 rounded-2xl overflow-hidden border border-border shadow-xl fade-in">
+      <div class="hero-photo p-8 hidden md:flex flex-col justify-between min-h-[420px]">
+        <div class="relative z-10 text-white">
+          <div class="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center mb-4">${icon('heart-pulse', 'w-5 h-5')}</div>
+          <h3 class="display text-2xl font-semibold mb-2">კეთილი იყოს თქვენი დაბრუნება</h3>
+          <p class="text-sm text-white/80">შედით სისტემაში და გააგრძელეთ ჯავშნების მართვა, ისტორიის ნახვა და შეტყობინებების მიღება.</p>
+        </div>
+        <div class="relative z-10">${heartbeatSvg('w-full h-12 opacity-80')}</div>
+      </div>
+      <div class="bg-surface p-8">
+        <h2 class="display text-2xl font-semibold mb-1">შესვლა</h2>
+        <p class="text-muted text-sm mb-6">შედით სისტემაში თქვენი ანგარიშით.</p>
+        <form onsubmit="return handleLogin(event)" class="space-y-4">
+          <div><label class="text-sm font-medium flex items-center gap-1.5">${icon('mail', 'w-3.5 h-3.5 text-muted')}ელ-ფოსტა</label>
+            <input required type="email" id="login-email" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper" placeholder="you@example.com"/></div>
+          <div><label class="text-sm font-medium flex items-center gap-1.5">${icon('lock', 'w-3.5 h-3.5 text-muted')}პაროლი</label>
+            <input required type="password" id="login-password" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"/></div>
+          <button class="w-full py-2.5 rounded-lg grad-primary text-white font-medium hover:opacity-90 transition flex items-center justify-center gap-2">${icon('log-out', 'w-4 h-4 rotate-180')}შესვლა</button>
+        </form>
+        <p class="text-sm text-muted mt-3"><a class="text-primary cursor-pointer" onclick="setView('forgot')">დაგავიწყდათ პაროლი?</a></p>
+        <p class="text-sm text-muted mt-2">არ გაქვთ ანგარიში? <a class="text-primary font-medium cursor-pointer" onclick="setView('register')">დარეგისტრირდით</a></p>
+        <div class="mt-6 border-t border-border pt-4 text-xs text-muted">
+          <b>სატესტო ანგარიშები</b> (თუ გაშვებულია seed.py):<br/>
+          admin@clinic.ge / admin123 · patient@clinic.ge / patient123 · cardio@clinic.ge / doctor123
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+async function handleLogin(ev) {
+  ev.preventDefault();
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  try {
+    const data = await api('/auth/login', 'POST', { email, password }, false);
+    saveSession(data);
+    toast('წარმატებით შეხვედით სისტემაში', 'success');
+    goDashboard();
+  } catch (e) { toast(e.message, 'error'); }
+  return false;
+}
+
+function renderForgotPassword() {
+  shell(`
+    <div class="max-w-md mx-auto bg-surface border border-border rounded-2xl p-8 fade-in">
+      <h2 class="display text-2xl font-semibold mb-1 flex items-center gap-2">${icon('lock', 'w-5 h-5 text-primary')}პაროლის აღდგენა</h2>
+      <p class="text-muted text-sm mb-6">შეიყვანეთ თქვენი ელ-ფოსტა — გამოგზავნით აღდგენის ბმულს.</p>
+      <form onsubmit="return handleForgotPassword(event)" class="space-y-4">
+        <div><label class="text-sm font-medium">ელ-ფოსტა</label>
+          <input required type="email" id="forgot-email" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper" placeholder="you@example.com"/></div>
+        <button class="w-full py-2.5 rounded-lg grad-primary text-white font-medium hover:opacity-90 transition">ბმულის გამოგზავნა</button>
+      </form>
+      <div id="forgot-result" class="mt-4"></div>
+      <p class="text-sm text-muted mt-4"><a class="text-primary cursor-pointer" onclick="setView('login')">← შესვლაზე დაბრუნება</a></p>
+    </div>
+  `);
+}
+
+async function handleForgotPassword(ev) {
+  ev.preventDefault();
+  const email = document.getElementById('forgot-email').value;
+  const resultEl = document.getElementById('forgot-result');
+  try {
+    const res = await api('/auth/forgot-password', 'POST', { email }, false);
+    let html = `<div class="border border-primary/30 bg-primary/5 rounded-xl p-4 text-sm text-ink/80">${escapeHtml(res.message)}</div>`;
+    if (res.demo_reset_token) {
+      html += `
+        <div class="mt-3 border border-clay/30 bg-clay/5 rounded-xl p-4 text-sm">
+          <p class="font-medium mb-2 flex items-center gap-1.5">${icon('info', 'w-4 h-4 text-clay')}დემო რეჟიმი</p>
+          <p class="text-muted mb-3">რეალურ სისტემაში ეს ბმული გაეგზავნებოდა თქვენს ელ-ფოსტას. ამ აკადემიური დემოსთვის, აქ პირდაპირ გამოგიტანეთ:</p>
+          <button class="w-full py-2 rounded-lg bg-clay text-white text-sm font-medium hover:opacity-90" onclick="goToReset('${res.demo_reset_token}')">გაგრძელება პაროლის აღდგენაზე →</button>
+        </div>`;
+    }
+    resultEl.innerHTML = html;
+  } catch (e) { toast(e.message, 'error'); }
+  return false;
+}
+
+function goToReset(token) {
+  state.resetToken = token;
+  setView('reset');
+}
+
+function renderResetPassword() {
+  shell(`
+    <div class="max-w-md mx-auto bg-surface border border-border rounded-2xl p-8 fade-in">
+      <h2 class="display text-2xl font-semibold mb-1 flex items-center gap-2">${icon('shield-check', 'w-5 h-5 text-primary')}ახალი პაროლის დაყენება</h2>
+      <p class="text-muted text-sm mb-6">შეიყვანეთ ახალი პაროლი თქვენი ანგარიშისთვის.</p>
+      <form onsubmit="return handleResetPassword(event)" class="space-y-4">
+        <div><label class="text-sm font-medium">აღდგენის ტოკენი</label>
+          <input required id="reset-token" value="${escapeHtml(state.resetToken || '')}" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper font-mono text-xs"/></div>
+        <div><label class="text-sm font-medium">ახალი პაროლი</label>
+          <input required type="password" minlength="6" id="reset-new-password" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"/></div>
+        <button class="w-full py-2.5 rounded-lg grad-primary text-white font-medium hover:opacity-90 transition">პაროლის განახლება</button>
+      </form>
+      <p class="text-sm text-muted mt-4"><a class="text-primary cursor-pointer" onclick="setView('login')">← შესვლაზე დაბრუნება</a></p>
+    </div>
+  `);
+}
+
+async function handleResetPassword(ev) {
+  ev.preventDefault();
+  const token = document.getElementById('reset-token').value;
+  const new_password = document.getElementById('reset-new-password').value;
+  try {
+    await api('/auth/reset-password', 'POST', { token, new_password }, false);
+    toast('პაროლი წარმატებით განახლდა — შედით ახალი პაროლით', 'success');
+    state.resetToken = null;
+    setView('login');
+  } catch (e) { toast(e.message, 'error'); }
+  return false;
+}
+
+function renderRegister() {
+  shell(`
+    <div class="max-w-lg mx-auto bg-surface border border-border rounded-2xl p-8 fade-in">
+      <h2 class="display text-2xl font-semibold mb-1">რეგისტრაცია</h2>
+      <p class="text-muted text-sm mb-6">შექმენით ახალი ანგარიში.</p>
+      <form onsubmit="return handleRegister(event)" class="space-y-4">
+        <div><label class="text-sm font-medium">როლი</label>
+          <select id="reg-role" onchange="toggleDoctorFields()" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper">
+            <option value="patient">პაციენტი</option>
+            <option value="doctor">ექიმი</option>
+          </select></div>
+        <div><label class="text-sm font-medium">სრული სახელი</label>
+          <input required id="reg-name" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"/></div>
+        <div><label class="text-sm font-medium">ელ-ფოსტა</label>
+          <input required type="email" id="reg-email" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"/></div>
+        <div><label class="text-sm font-medium">ტელეფონი</label>
+          <input id="reg-phone" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"/></div>
+        <div><label class="text-sm font-medium">პაროლი</label>
+          <input required type="password" minlength="6" id="reg-password" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"/></div>
+        <div id="doctor-fields" class="hidden space-y-4 border-t border-border pt-4">
+          <div><label class="text-sm font-medium">სპეციალობა</label>
+            <input id="reg-specialty" placeholder="მაგ: კარდიოლოგი" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"/></div>
+          <div><label class="text-sm font-medium">მოკლე ბიოგრაფია</label>
+            <textarea id="reg-bio" rows="2" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"></textarea></div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="text-sm font-medium">გამოცდილება (წელი)</label>
+              <input type="number" min="0" id="reg-experience" value="1" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"/></div>
+            <div><label class="text-sm font-medium">ვიზიტის ღირებულება (₾)</label>
+              <input type="number" min="0" id="reg-fee" value="50" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"/></div>
+          </div>
+        </div>
+        <button class="w-full py-2.5 rounded-lg bg-primary text-white font-medium hover:bg-primaryDark transition">ანგარიშის შექმნა</button>
+      </form>
+      <p class="text-sm text-muted mt-4">უკვე გაქვთ ანგარიში? <a class="text-primary font-medium cursor-pointer" onclick="setView('login')">შედით</a></p>
+    </div>
+  `);
+}
+
+function toggleDoctorFields() {
+  const role = document.getElementById('reg-role').value;
+  document.getElementById('doctor-fields').classList.toggle('hidden', role !== 'doctor');
+}
+
+async function handleRegister(ev) {
+  ev.preventDefault();
+  const role = document.getElementById('reg-role').value;
+  const payload = {
+    email: document.getElementById('reg-email').value,
+    password: document.getElementById('reg-password').value,
+    full_name: document.getElementById('reg-name').value,
+    phone: document.getElementById('reg-phone').value,
+    role,
+  };
+  if (role === 'doctor') {
+    payload.specialty = document.getElementById('reg-specialty').value || 'ოჯახის ექიმი';
+    payload.bio = document.getElementById('reg-bio').value;
+    payload.years_experience = parseInt(document.getElementById('reg-experience').value || '0', 10);
+    payload.consultation_fee = parseFloat(document.getElementById('reg-fee').value || '0');
+  }
+  try {
+    const data = await api('/auth/register', 'POST', payload, false);
+    saveSession(data);
+    toast('ანგარიში წარმატებით შეიქმნა', 'success');
+    goDashboard();
+  } catch (e) { toast(e.message, 'error'); }
+  return false;
+}
+
+/* ---------------------------- Patient dashboard --------------------------- */
+
+async function renderPatient() {
+  const tabs = `
+    <div class="flex gap-2 mb-6 border-b border-border overflow-x-auto">
+      ${tabBtn('book', 'ჯავშნის გაკეთება', state.patientTab, 'patientTab')}
+      ${tabBtn('mine', 'ჩემი ჯავშნები', state.patientTab, 'patientTab')}
+      ${tabBtn('history', 'სამედიცინო ისტორია', state.patientTab, 'patientTab')}
+      ${tabBtn('profile', 'პროფილი', state.patientTab, 'patientTab')}
+    </div>`;
+
+  if (state.patientTab === 'mine') {
+    const appts = await api('/appointments/me');
+    shell(`<h1 class="display text-3xl font-semibold mb-4">ჩემი დაშბორდი</h1>${tabs}${appointmentsTable(appts, 'patient')}`);
+    return;
+  }
+
+  if (state.patientTab === 'history') {
+    const appts = await api('/appointments/me');
+    const completed = appts.filter(a => a.status === 'completed').sort((a,b) => new Date(b.start_time) - new Date(a.start_time));
+    shell(`<h1 class="display text-3xl font-semibold mb-4">ჩემი დაშბორდი</h1>${tabs}
+      <h2 class="font-semibold mb-4 flex items-center gap-2">${icon('history', 'text-primary')}სამედიცინო ისტორია</h2>
+      ${completed.length ? `<div class="space-y-4">${completed.map(historyItem).join('')}</div>` : emptyState('დასრულებული ვიზიტები ჯერ არ გაქვთ.', 'file-clock')}
+    `);
+    return;
+  }
+
+  if (state.patientTab === 'profile') {
+    renderProfileTab();
+    return;
+  }
+
+  const specialties = await api('/doctors/specialties');
+  shell(`
+    <h1 class="display text-3xl font-semibold mb-4">ჩემი დაშბორდი</h1>
+    ${tabs}
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="md:col-span-1 bg-surface border border-border rounded-xl p-5">
+        <h3 class="font-semibold mb-3">1. აირჩიეთ სპეციალობა</h3>
+        <div class="flex flex-wrap gap-2 mb-4">
+          ${specialties.map(s => `<button class="px-3 py-1.5 rounded-lg text-sm border ${state.bookingFlow.specialty===s?'bg-primary text-white border-primary':'border-border hover:bg-paper'}" onclick="selectSpecialty('${escapeHtml(s)}')">${escapeHtml(s)}</button>`).join('')}
+        </div>
+        <div class="border-t border-border pt-4 mb-4">
+          <h3 class="font-semibold mb-2 text-sm">ან სცადეთ AI რეკომენდაცია</h3>
+          <textarea id="patient-symptom-input" rows="2" class="w-full border border-border rounded-lg px-3 py-2 text-sm bg-paper" placeholder="აღწერეთ სიმპტომები..."></textarea>
+          <div id="symptom-chips-patient" class="flex flex-wrap gap-1.5 mt-2 mb-2"></div>
+          ${bodyMapWidget('patient-symptom-input', 'patient')}
+          <button class="mt-2 w-full py-2 rounded-lg bg-clay text-white text-sm font-medium hover:opacity-90" onclick="runPatientAiCheck()">რეკომენდაცია</button>
+        </div>
+        <div class="border-t border-border pt-4">
+          <h3 class="font-semibold mb-2 text-sm flex items-center gap-1.5">${icon('search', 'w-4 h-4')}ძებნა და ფილტრი</h3>
+          <input id="doctor-search-name" placeholder="ექიმის სახელით ძებნა..." class="w-full mb-2 border border-border rounded-lg px-3 py-2 text-sm bg-paper"/>
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <input id="doctor-search-min-fee" type="number" min="0" placeholder="ფასი დან (₾)" class="border border-border rounded-lg px-3 py-2 text-sm bg-paper"/>
+            <input id="doctor-search-max-fee" type="number" min="0" placeholder="ფასი მდე (₾)" class="border border-border rounded-lg px-3 py-2 text-sm bg-paper"/>
+          </div>
+          <input id="doctor-search-min-exp" type="number" min="0" placeholder="მინ. გამოცდილება (წელი)" class="w-full mb-2 border border-border rounded-lg px-3 py-2 text-sm bg-paper"/>
+          <button class="w-full py-2 rounded-lg border border-primary text-primary text-sm font-medium hover:bg-primary/5" onclick="runDoctorSearch()">ძებნა</button>
+          <button class="w-full mt-2 py-2 rounded-lg border border-clay/40 text-clay text-sm font-medium hover:bg-clay/5 flex items-center justify-center gap-1.5" onclick="showFavoriteDoctors()">${icon('star', 'w-4 h-4')}ჩემი რჩეული ექიმები</button>
+        </div>
+        <div id="upcoming-holidays" class="border-t border-border pt-4 mt-4"></div>
+      </div>
+      <div class="md:col-span-2" id="booking-panel">
+        <div class="bg-surface border border-border rounded-xl p-5 text-muted text-sm">აირჩიეთ სპეციალობა მარცხნივ, ან გამოიყენეთ ძებნა, რომ ნახოთ ხელმისაწვდომი ექიმები.</div>
+      </div>
+    </div>
+  `);
+  loadSymptomChips('symptom-chips-patient', 'patient-symptom-input');
+  renderUpcomingHolidays('upcoming-holidays');
+}
+
+async function renderUpcomingHolidays(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  try {
+    const year = new Date().getFullYear();
+    let holidays = await api(`/holidays?year=${year}`, 'GET', null, false);
+    const today = new Date().toISOString().slice(0, 10);
+    holidays = holidays.filter(h => h.date >= today).slice(0, 3);
+    if (!holidays.length) { container.innerHTML = ''; return; }
+    container.innerHTML = `
+      <h3 class="font-semibold mb-2 text-sm flex items-center gap-1.5">${icon('calendar-off', 'w-4 h-4 text-muted')}უახლოესი უქმე დღეები</h3>
+      <ul class="text-xs text-muted space-y-1">
+        ${holidays.map(h => `<li class="flex justify-between"><span>${escapeHtml(h.name)}</span><span>${new Date(h.date).toLocaleDateString('ka-GE', {day:'numeric', month:'short'})}</span></li>`).join('')}
+      </ul>
+      <p class="text-[10px] text-muted mt-1">ამ დღეებზე ჯავშნის გაკეთება შეუძლებელია.</p>`;
+  } catch (e) { container.innerHTML = ''; }
+}
+
+async function runDoctorSearch() {
+  state.bookingFlow.specialty = null;
+  const params = new URLSearchParams();
+  const name = document.getElementById('doctor-search-name').value.trim();
+  const minFee = document.getElementById('doctor-search-min-fee').value;
+  const maxFee = document.getElementById('doctor-search-max-fee').value;
+  const minExp = document.getElementById('doctor-search-min-exp').value;
+  if (name) params.set('name', name);
+  if (minFee) params.set('min_fee', minFee);
+  if (maxFee) params.set('max_fee', maxFee);
+  if (minExp) params.set('min_experience', minExp);
+  try {
+    const doctors = await api('/doctors?' + params.toString());
+    renderBookingPanelDoctors(doctors);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function showFavoriteDoctors() {
+  state.bookingFlow.specialty = null;
+  try {
+    const doctors = await api('/doctors?favorites_only=true');
+    document.getElementById('booking-panel').innerHTML = doctors.length
+      ? `<h3 class="font-semibold mb-3 flex items-center gap-1.5">${icon('star', 'w-4 h-4 text-clay')}ჩემი რჩეული ექიმები</h3>` + doctorsListForBooking(doctors)
+      : emptyState('რჩეული ექიმები ჯერ არ გაქვთ — დააჭირეთ ⭐ ექიმის ბარათზე.', 'star');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function historyItem(a) {
+  return `<div class="bg-surface border border-border rounded-xl p-5 relative pl-8">
+    <div class="absolute left-3 top-6 w-2.5 h-2.5 rounded-full bg-primary"></div>
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+      <div class="font-semibold">${escapeHtml(a.doctor_name || '')} <span class="text-muted font-normal text-sm">· ${escapeHtml(a.specialty || '')}</span></div>
+      <span class="text-xs text-muted">${new Date(a.start_time).toLocaleString('ka-GE', {dateStyle:'medium', timeStyle:'short'})}</span>
+    </div>
+    ${a.diagnosis ? `<p class="text-sm mb-1"><b>დიაგნოზი:</b> ${escapeHtml(a.diagnosis)}</p>` : ''}
+    ${a.medication ? `<p class="text-sm mb-1"><b>მედიკამენტი:</b> ${escapeHtml(a.medication)}${a.dosage ? ` (${escapeHtml(a.dosage)})` : ''}</p>` : ''}
+    ${a.instructions ? `<p class="text-sm text-muted mb-1"><b>ინსტრუქცია:</b> ${escapeHtml(a.instructions)}</p>` : ''}
+    ${a.review_rating ? `<div class="mt-2">${ratingStars(a.review_rating, 1)} <span class="text-xs text-muted">თქვენი შეფასება</span></div>` : ''}
+    <button class="mt-3 text-primary text-xs font-medium flex items-center gap-1" onclick="downloadPrescription(${a.id})">${icon('download', 'w-3.5 h-3.5')}რეცეპტის PDF</button>
+  </div>`;
+}
+
+async function renderProfileTab() {
+  const [me, familyMembers] = await Promise.all([
+    api('/auth/me'),
+    api('/family-members'),
+  ]);
+  const tabs = `
+    <div class="flex gap-2 mb-6 border-b border-border overflow-x-auto">
+      ${tabBtn('book', 'ჯავშნის გაკეთება', state.patientTab, 'patientTab')}
+      ${tabBtn('mine', 'ჩემი ჯავშნები', state.patientTab, 'patientTab')}
+      ${tabBtn('history', 'სამედიცინო ისტორია', state.patientTab, 'patientTab')}
+      ${tabBtn('profile', 'პროფილი', state.patientTab, 'patientTab')}
+    </div>`;
+  shell(`
+    <h1 class="display text-3xl font-semibold mb-4">ჩემი დაშბორდი</h1>
+    ${tabs}
+    <div class="grid md:grid-cols-2 gap-6 max-w-3xl">
+      <div class="bg-surface border border-border rounded-xl p-6">
+        <h3 class="font-semibold mb-4 flex items-center gap-2">${icon('user-round-cog', 'text-primary')}პროფილის რედაქტირება</h3>
+        <form onsubmit="return handleProfileUpdate(event)" class="space-y-4">
+          <div><label class="text-sm font-medium">სრული სახელი</label>
+            <input id="profile-name" value="${escapeHtml(me.full_name)}" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"/></div>
+          <div><label class="text-sm font-medium">ტელეფონი</label>
+            <input id="profile-phone" value="${escapeHtml(me.phone || '')}" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"/></div>
+          <div class="border-t border-border pt-4">
+            <p class="text-sm font-medium mb-2">პაროლის შეცვლა (არასავალდებულო)</p>
+            <input type="password" id="profile-current-password" placeholder="მიმდინარე პაროლი" class="w-full mb-2 border border-border rounded-lg px-3 py-2 bg-paper"/>
+            <input type="password" id="profile-new-password" placeholder="ახალი პაროლი" class="w-full border border-border rounded-lg px-3 py-2 bg-paper"/>
+          </div>
+          <button class="w-full py-2.5 rounded-lg bg-primary text-white font-medium hover:bg-primaryDark transition">შენახვა</button>
+        </form>
+      </div>
+      <div class="bg-surface border border-border rounded-xl p-6">
+        <h3 class="font-semibold mb-4 flex items-center gap-2">${icon('users', 'text-primary')}ოჯახის წევრები</h3>
+        <p class="text-xs text-muted mb-3">დაამატეთ ოჯახის წევრი, რომ მისთვისაც შეძლოთ ვიზიტის დაჯავშნა თქვენი ანგარიშიდან.</p>
+        <div class="space-y-2 mb-4">
+          ${familyMembers.length ? familyMembers.map(f => `
+            <div class="flex items-center justify-between bg-paper rounded-lg px-3 py-2 text-sm">
+              <span>${escapeHtml(f.full_name)} ${f.relation ? `<span class="text-muted">(${escapeHtml(f.relation)})</span>` : ''}</span>
+              <button class="text-danger text-xs font-medium" onclick="handleDeleteFamilyMember(${f.id})">წაშლა</button>
+            </div>`).join('') : `<p class="text-muted text-sm">ოჯახის წევრი ჯერ არ დამატებულა.</p>`}
+        </div>
+        <form onsubmit="return handleAddFamilyMember(event)" class="grid grid-cols-2 gap-2">
+          <input required id="family-name" placeholder="სახელი გვარი" class="col-span-2 border border-border rounded-lg px-3 py-2 text-sm bg-paper"/>
+          <input id="family-relation" placeholder="ნათესაობა (მაგ: შვილი)" class="border border-border rounded-lg px-3 py-2 text-sm bg-paper"/>
+          <input type="date" id="family-dob" class="border border-border rounded-lg px-3 py-2 text-sm bg-paper"/>
+          <button class="col-span-2 py-2 rounded-lg bg-clay text-white text-sm font-medium hover:opacity-90">დამატება</button>
+        </form>
+      </div>
+    </div>
+  `);
+}
+
+async function handleAddFamilyMember(ev) {
+  ev.preventDefault();
+  const payload = {
+    full_name: document.getElementById('family-name').value,
+    relation: document.getElementById('family-relation').value || null,
+    date_of_birth: document.getElementById('family-dob').value || null,
+  };
+  try {
+    await api('/family-members', 'POST', payload);
+    toast('ოჯახის წევრი დაემატა', 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+  return false;
+}
+
+async function handleDeleteFamilyMember(id) {
+  if (!confirm('წავშალო ეს ჩანაწერი?')) return;
+  try {
+    await api(`/family-members/${id}`, 'DELETE');
+    toast('წაიშალა', 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function handleProfileUpdate(ev) {
+  ev.preventDefault();
+  const payload = {
+    full_name: document.getElementById('profile-name').value,
+    phone: document.getElementById('profile-phone').value,
+  };
+  const currentPw = document.getElementById('profile-current-password').value;
+  const newPw = document.getElementById('profile-new-password').value;
+  if (newPw) {
+    payload.current_password = currentPw;
+    payload.new_password = newPw;
+  }
+  try {
+    const updated = await api('/auth/me', 'PUT', payload);
+    state.fullName = updated.full_name;
+    localStorage.setItem('mc_full_name', updated.full_name);
+    toast('პროფილი განახლდა', 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+  return false;
+}
+
+function tabBtn(id, label, current, stateKey) {
+  const active = current === id;
+  return `<button class="px-4 py-2 text-sm font-medium border-b-2 ${active ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-ink'}" onclick="state.${stateKey}='${id}'; route();">${label}</button>`;
+}
+
+async function selectSpecialty(specialty) {
+  state.bookingFlow.specialty = specialty;
+  const doctors = await api('/doctors?specialty=' + encodeURIComponent(specialty));
+  renderBookingPanelDoctors(doctors);
+}
+
+async function runPatientAiCheck() {
+  const text = document.getElementById('patient-symptom-input').value.trim();
+  if (!text) { toast('გთხოვთ, აღწერეთ სიმპტომები'); return; }
+  try {
+    const res = await api('/ai/recommend', 'POST', { text });
+    state.bookingFlow.specialty = res.specialty;
+    document.getElementById('booking-panel').innerHTML = urgencyBanner(res) + `
+      <div class="bg-primary/5 border border-primary/30 rounded-xl p-4 mb-4 text-sm">
+        AI-მ შემოგთავაზათ სპეციალობა: <b>${escapeHtml(res.specialty)}</b> (სანდოობა ${Math.round(res.confidence*100)}%)<br/>
+        <span class="text-muted">${escapeHtml(res.reason)}</span>
+        ${alternativesLine(res)}
+      </div>` + doctorsListForBooking(res.doctors);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function renderBookingPanelDoctors(doctors) {
+  document.getElementById('booking-panel').innerHTML = doctorsListForBooking(doctors);
+}
+
+function doctorsListForBooking(doctors) {
+  const backBtn = `<button class="mb-3 text-sm text-muted hover:text-primary flex items-center gap-1.5" onclick="goBackToSpecialties()">${icon('arrow-left', 'w-4 h-4')}სხვა სპეციალობის არჩევა</button>`;
+  if (!doctors.length) return backBtn + emptyState('ამ სპეციალობაზე ექიმი ვერ მოიძებნა.', 'search-x');
+  return backBtn + `<div class="grid sm:grid-cols-2 gap-4">${doctors.map((d, idx) => {
+    const meta = specialtyMeta(d.specialty);
+    return `
+    <div class="bg-surface border border-border rounded-xl p-4 card-hover relative">
+      ${idx === 0 && d.avg_rating ? `<span class="absolute -top-2 -right-2 badge bg-clay text-white flex items-center gap-1 shadow">${icon('trophy', 'w-3 h-3')}საუკეთესო არჩევანი</span>` : ''}
+      <div class="flex items-center gap-3 mb-2">
+        <img src="${doctorAvatarUrl(d.id, d.full_name, meta.color)}" alt="" class="avatar-ring w-11 h-11 rounded-full object-cover" style="--ring-color:${meta.color}" onerror="this.style.display='none'"/>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold">${escapeHtml(d.full_name)}</div>
+          <div class="text-sm flex items-center gap-1" style="color:${meta.color}">${icon(meta.icon, 'w-3.5 h-3.5')}${escapeHtml(d.specialty)}</div>
+        </div>
+        ${favoriteStarBtn(d)}
+      </div>
+      <div class="text-xs text-muted mb-1">${ratingStars(d.avg_rating, d.review_count)}</div>
+      <div class="text-xs text-muted mb-3">${d.consultation_fee}₾ · ${d.years_experience} წლიანი გამოცდილება</div>
+      <button class="w-full py-1.5 rounded-lg bg-primary text-white text-sm hover:bg-primaryDark flex items-center justify-center gap-1.5" onclick="selectDoctorForBooking(${d.id})">${icon('calendar-clock', 'w-4 h-4')}დროის არჩევა</button>
+    </div>`;}).join('')}</div>
+  <div id="slot-panel" class="mt-4"></div>`;
+}
+
+function goBackToSpecialties() {
+  state.bookingFlow = { specialty: null, doctors: [], selectedDoctor: null, day: null, slots: [] };
+  document.getElementById('booking-panel').innerHTML = `<div class="bg-surface border border-border rounded-xl p-5 text-muted text-sm">აირჩიეთ სპეციალობა მარცხნივ, ან გამოიყენეთ ძებნა, რომ ნახოთ ხელმისაწვდომი ექიმები.</div>`;
+}
+
+async function selectDoctorForBooking(doctorId) {
+  state.bookingFlow.selectedDoctor = doctorId;
+  const today = new Date().toISOString().slice(0, 10);
+  let panel = document.getElementById('slot-panel');
+  if (!panel) {
+    document.getElementById('booking-panel').insertAdjacentHTML('beforeend', '<div id="slot-panel" class="mt-4"></div>');
+    panel = document.getElementById('slot-panel');
+  }
+  let familyOptions = '';
+  try {
+    const familyMembers = await api('/family-members');
+    if (familyMembers.length) {
+      familyOptions = `
+        <div class="mt-4">
+          <label class="text-sm font-medium">ვისთვის ჯავშნით?</label>
+          <select id="booking-for" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper text-sm">
+            <option value="">საკუთარი თავისთვის</option>
+            ${familyMembers.map(f => `<option value="${f.id}">${escapeHtml(f.full_name)}${f.relation ? ' (' + escapeHtml(f.relation) + ')' : ''}</option>`).join('')}
+          </select>
+        </div>`;
+    }
+  } catch (e) { /* not critical */ }
+  panel.innerHTML = `
+    <div class="bg-surface border border-border rounded-xl p-5 fade-in">
+      <button class="mb-3 text-sm text-muted hover:text-primary flex items-center gap-1.5" onclick="closeSlotPanel()">${icon('arrow-left', 'w-4 h-4')}სხვა ექიმის არჩევა</button>
+      <h3 class="font-semibold mb-3">2. აირჩიეთ თარიღი</h3>
+      <input type="date" id="booking-date" min="${today}" value="${today}" class="border border-border rounded-lg px-3 py-2 bg-paper text-sm" onchange="loadSlots(${doctorId})"/>
+      <div id="slots-list" class="flex flex-wrap gap-2 mt-4"></div>
+      ${familyOptions}
+      <div class="mt-4">
+        <label class="text-sm font-medium">სიმპტომების აღწერა (არასავალდებულო)</label>
+        <textarea id="booking-symptoms" rows="2" class="w-full mt-1 border border-border rounded-lg px-3 py-2 text-sm bg-paper"></textarea>
+      </div>
+    </div>`;
+  loadSlots(doctorId);
+}
+
+function closeSlotPanel() {
+  state.bookingFlow.selectedDoctor = null;
+  const panel = document.getElementById('slot-panel');
+  if (panel) panel.innerHTML = '';
+}
+
+async function loadSlots(doctorId) {
+  const day = document.getElementById('booking-date').value;
+  state.bookingFlow.day = day;
+  const listEl = document.getElementById('slots-list');
+  listEl.innerHTML = `<span class="text-sm text-muted">იტვირთება...</span>`;
+  try {
+    const res = await api(`/doctors/${doctorId}/availability?day=${day}`);
+    if (res.holiday_name) {
+      listEl.innerHTML = `<span class="text-sm text-danger flex items-center gap-1.5">${icon('calendar-off', 'w-4 h-4')}${escapeHtml(day)} უქმე დღეა (${escapeHtml(res.holiday_name)}) — ექიმები არ იღებენ პაციენტებს, სცადეთ სხვა თარიღი.</span>`;
+      return;
+    }
+    if (!res.available_slots.length) {
+      listEl.innerHTML = `<span class="text-sm text-muted">ამ დღეს თავისუფალი დრო არ არის, სცადეთ სხვა თარიღი.</span>`;
+      return;
+    }
+    listEl.innerHTML = res.available_slots.map(s => {
+      const time = s.split('T')[1];
+      return `<button class="px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-primary hover:text-white hover:border-primary transition" onclick="confirmBooking(${doctorId}, '${s}')">${time}</button>`;
+    }).join('');
+  } catch (e) { listEl.innerHTML = `<span class="text-sm text-danger">${escapeHtml(e.message)}</span>`; }
+}
+
+async function confirmBooking(doctorId, startTime) {
+  const symptoms = document.getElementById('booking-symptoms').value;
+  const forEl = document.getElementById('booking-for');
+  const family_member_id = forEl && forEl.value ? parseInt(forEl.value, 10) : null;
+  try {
+    await api('/appointments', 'POST', { doctor_id: doctorId, start_time: startTime, symptoms, family_member_id });
+    toast('ჯავშანი წარმატებით დაფიქსირდა!', 'success');
+    state.patientTab = 'mine';
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function appointmentsTable(appts, viewerRole) {
+  if (!appts.length) return emptyState('ჯავშნები ჯერ არ გაქვთ.', 'calendar-x');
+  const hasCompleted = appts.some(a => a.status === 'completed');
+  const hasUnreviewed = appts.some(a => a.status === 'completed' && !a.review_rating);
+  return `
+  ${viewerRole === 'patient' && hasCompleted && hasUnreviewed ? `
+    <div class="mb-3 text-xs text-muted flex items-center gap-1.5">${icon('star', 'w-3.5 h-3.5 text-clay')}დასრულებულ ვიზიტებზე შეგიძლიათ დატოვოთ შეფასება — ღილაკი ცხრილშია, "მოქმედება" სვეტში.</div>` : ''}
+  <div class="bg-surface border border-border rounded-xl overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-paper text-muted text-left">
+        <tr>
+          <th class="p-3">თარიღი/დრო</th>
+          ${viewerRole !== 'patient' ? '<th class="p-3">პაციენტი</th>' : '<th class="p-3">ექიმი</th>'}
+          <th class="p-3">სპეციალობა</th>
+          <th class="p-3">სტატუსი</th>
+          <th class="p-3">მოქმედება</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${appts.map(a => `
+          <tr class="border-t border-border align-top">
+            <td class="p-3">
+              ${new Date(a.start_time).toLocaleString('ka-GE', {dateStyle:'medium', timeStyle:'short'})}
+              ${a.rescheduled_count ? `<span class="text-[10px] text-muted block">↻ გადატანილია</span>` : ''}
+              ${a.urgency_level && a.urgency_level !== 'routine' ? `<span class="text-[10px] font-medium block" style="color:${a.urgency_level === 'emergency' ? '#C0392B' : '#B45309'}">${a.urgency_level === 'emergency' ? '⚠ გადაუდებელი' : '⚠ სასწრაფო'}</span>` : ''}
+            </td>
+            <td class="p-3">${escapeHtml(viewerRole !== 'patient' ? a.patient_name : a.doctor_name)}${a.family_member_name ? `<span class="text-[10px] text-muted block">ოჯახის წევრი: ${escapeHtml(a.family_member_name)}</span>` : ''}</td>
+            <td class="p-3">${escapeHtml(a.specialty || '')}</td>
+            <td class="p-3"><span class="badge ${statusBadgeClass(a.status)}">${statusLabel(a.status)}</span></td>
+            <td class="p-3 space-x-2">
+              ${a.status === 'scheduled' ? `<button class="text-primary text-xs font-medium" onclick="openRescheduleForm(${a.id}, ${a.doctor_id})">გადატანა</button>` : ''}
+              ${a.status === 'scheduled' && viewerRole === 'patient' ? `<button class="text-danger text-xs font-medium" onclick="cancelAppointment(${a.id})">გაუქმება</button>` : ''}
+              ${a.status === 'scheduled' && viewerRole === 'doctor' ? `<button class="text-primary text-xs font-medium" onclick="openPrescriptionForm(${a.id})">დასრულება+რეცეპტი</button>
+                <button class="text-danger text-xs font-medium" onclick="cancelAppointment(${a.id})">გაუქმება</button>` : ''}
+              ${a.status === 'completed' ? `<button class="text-primary text-xs font-medium" onclick="downloadPrescription(${a.id})">რეცეპტის PDF</button>` : ''}
+              ${a.status === 'completed' && viewerRole === 'patient' && !a.review_rating ? `<button class="text-clay text-xs font-medium" onclick="openReviewForm(${a.id})">⭐ შეფასების დატოვება</button>` : ''}
+              ${a.status === 'completed' && viewerRole === 'patient' && a.review_rating ? `<span class="text-xs text-muted">${ratingStars(a.review_rating, 1)}</span>` : ''}
+            </td>
+          </tr>
+          <tr id="rx-row-${a.id}"></tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function openRescheduleForm(appointmentId, doctorId) {
+  const row = document.getElementById(`rx-row-${appointmentId}`);
+  const today = new Date().toISOString().slice(0, 10);
+  row.innerHTML = `<td colspan="5" class="p-4 bg-paper">
+    <div class="flex flex-wrap items-end gap-3">
+      <div>
+        <label class="text-xs font-medium block mb-1">ახალი თარიღი</label>
+        <input type="date" id="resched-date-${appointmentId}" min="${today}" value="${today}" class="border border-border rounded-lg px-3 py-2 text-sm" onchange="loadRescheduleSlots(${appointmentId}, ${doctorId})"/>
+      </div>
+      <div id="resched-slots-${appointmentId}" class="flex flex-wrap gap-2"></div>
+    </div>
+  </td>`;
+  loadRescheduleSlots(appointmentId, doctorId);
+}
+
+async function loadRescheduleSlots(appointmentId, doctorId) {
+  const day = document.getElementById(`resched-date-${appointmentId}`).value;
+  const el = document.getElementById(`resched-slots-${appointmentId}`);
+  el.innerHTML = `<span class="text-sm text-muted">იტვირთება...</span>`;
+  try {
+    const res = await api(`/doctors/${doctorId}/availability?day=${day}`);
+    if (res.holiday_name) { el.innerHTML = `<span class="text-sm text-danger">უქმე დღეა (${escapeHtml(res.holiday_name)})</span>`; return; }
+    if (!res.available_slots.length) { el.innerHTML = `<span class="text-sm text-muted">თავისუფალი დრო არ არის.</span>`; return; }
+    el.innerHTML = res.available_slots.map(s => `<button class="px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-primary hover:text-white hover:border-primary transition" onclick="submitReschedule(${appointmentId}, '${s}')">${s.split('T')[1]}</button>`).join('');
+  } catch (e) { el.innerHTML = `<span class="text-sm text-danger">${escapeHtml(e.message)}</span>`; }
+}
+
+async function submitReschedule(appointmentId, newStartTime) {
+  try {
+    await api(`/appointments/${appointmentId}/reschedule`, 'PUT', { start_time: newStartTime });
+    toast('ჯავშანი გადატანილია', 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function cancelAppointment(id) {
+  if (!confirm('დარწმუნებული ხართ, რომ გსურთ ჯავშნის გაუქმება?')) return;
+  try {
+    await api(`/appointments/${id}/status`, 'PUT', { status: 'cancelled' });
+    toast('ჯავშანი გაუქმდა', 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function openPrescriptionForm(appointmentId) {
+  const row = document.getElementById(`rx-row-${appointmentId}`);
+  row.innerHTML = `<td colspan="5" class="p-4 bg-paper">
+    <div class="grid sm:grid-cols-2 gap-3">
+      <input id="rx-diag-${appointmentId}" placeholder="დიაგნოზი" class="border border-border rounded-lg px-3 py-2 text-sm"/>
+      <input id="rx-med-${appointmentId}" placeholder="მედიკამენტი" class="border border-border rounded-lg px-3 py-2 text-sm"/>
+      <input id="rx-dose-${appointmentId}" placeholder="დოზირება" class="border border-border rounded-lg px-3 py-2 text-sm"/>
+      <input id="rx-instr-${appointmentId}" placeholder="ინსტრუქცია" class="border border-border rounded-lg px-3 py-2 text-sm"/>
+    </div>
+    <button class="mt-3 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium" onclick="submitPrescription(${appointmentId})">დასრულება და შენახვა</button>
+  </td>`;
+}
+
+async function submitPrescription(appointmentId) {
+  const payload = {
+    diagnosis: document.getElementById(`rx-diag-${appointmentId}`).value,
+    medication: document.getElementById(`rx-med-${appointmentId}`).value,
+    dosage: document.getElementById(`rx-dose-${appointmentId}`).value,
+    instructions: document.getElementById(`rx-instr-${appointmentId}`).value,
+  };
+  if (!payload.medication) { toast('მედიკამენტის ველი სავალდებულოა'); return; }
+  try {
+    await api(`/appointments/${appointmentId}/prescription`, 'POST', payload);
+    toast('ვიზიტი დასრულდა და რეცეპტი შეინახა', 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+let selectedReviewRating = 5;
+function openReviewForm(appointmentId) {
+  selectedReviewRating = 5;
+  const row = document.getElementById(`rx-row-${appointmentId}`);
+  row.innerHTML = `<td colspan="5" class="p-4 bg-paper">
+    <div class="star-input flex gap-1 mb-2" id="review-stars-${appointmentId}">
+      ${[1,2,3,4,5].map(i => `<span onclick="setReviewRating(${appointmentId},${i})" style="color:${i<=5?'#D97757':'#E4DFD4'}">★</span>`).join('')}
+    </div>
+    <textarea id="review-comment-${appointmentId}" rows="2" placeholder="თქვენი კომენტარი ექიმის შესახებ (არასავალდებულო)" class="w-full border border-border rounded-lg px-3 py-2 text-sm"></textarea>
+    <button class="mt-3 px-4 py-2 rounded-lg bg-clay text-white text-sm font-medium" onclick="submitReview(${appointmentId})">შეფასების გაგზავნა</button>
+  </td>`;
+}
+
+function setReviewRating(appointmentId, rating) {
+  selectedReviewRating = rating;
+  const stars = document.getElementById(`review-stars-${appointmentId}`).children;
+  for (let i = 0; i < stars.length; i++) {
+    stars[i].style.color = (i + 1) <= rating ? '#D97757' : '#E4DFD4';
+  }
+}
+
+async function submitReview(appointmentId) {
+  const comment = document.getElementById(`review-comment-${appointmentId}`).value;
+  try {
+    await api(`/appointments/${appointmentId}/review`, 'POST', { rating: selectedReviewRating, comment });
+    toast('შეფასება დაემატა, გმადლობთ!', 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ---------------------------- Doctor dashboard ---------------------------- */
+
+function startOfWeek(d) {
+  const date = new Date(d);
+  const day = (date.getDay() + 6) % 7; // 0=Monday
+  date.setDate(date.getDate() - day);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function changeCalendarWeek(delta) {
+  state.calendarWeekOffset += delta;
+  route();
+}
+
+function urgencyDotColor(level) {
+  return { emergency: '#C0392B', urgent: '#B45309' }[level] || '#0F766E';
+}
+
+function doctorCalendarWeek(appts) {
+  const base = startOfWeek(new Date());
+  base.setDate(base.getDate() + state.calendarWeekOffset * 7);
+  const days = [...Array(7)].map((_, i) => {
+    const d = new Date(base);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+  const dayNames = ['ორშ', 'სამ', 'ოთხ', 'ხუთ', 'პარ', 'შაბ', 'კვ'];
+  const todayStr = new Date().toDateString();
+
+  const byDay = {};
+  days.forEach(d => { byDay[d.toDateString()] = []; });
+  appts.filter(a => a.status !== 'cancelled').forEach(a => {
+    const d = new Date(a.start_time);
+    const key = d.toDateString();
+    if (byDay[key]) byDay[key].push(a);
+  });
+  Object.values(byDay).forEach(list => list.sort((a, b) => new Date(a.start_time) - new Date(b.start_time)));
+
+  return `
+    <div class="flex items-center justify-between mb-4">
+      <button class="px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-paper flex items-center gap-1.5" onclick="changeCalendarWeek(-1)">${icon('arrow-left', 'w-4 h-4')}წინა კვირა</button>
+      <span class="text-sm font-medium">${days[0].toLocaleDateString('ka-GE', {day:'numeric', month:'short'})} — ${days[6].toLocaleDateString('ka-GE', {day:'numeric', month:'short'})}</span>
+      <button class="px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-paper flex items-center gap-1.5" onclick="changeCalendarWeek(1)">შემდეგი კვირა${icon('chevron-right', 'w-4 h-4')}</button>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-7 gap-3">
+      ${days.map((d, i) => {
+        const key = d.toDateString();
+        const list = byDay[key];
+        const isToday = key === todayStr;
+        return `
+        <div class="bg-surface border ${isToday ? 'border-primary' : 'border-border'} rounded-xl p-3 min-h-[140px]">
+          <div class="text-xs font-medium mb-2 flex items-center justify-between">
+            <span class="${isToday ? 'text-primary' : 'text-muted'}">${dayNames[i]} · ${d.getDate()}</span>
+            ${list.length ? `<span class="badge bg-primary/10 text-primary">${list.length}</span>` : ''}
+          </div>
+          <div class="space-y-1.5">
+            ${list.length ? list.map(a => `
+              <div class="text-[11px] px-2 py-1 rounded-lg border" style="border-color:${urgencyDotColor(a.urgency_level)}44; background:${urgencyDotColor(a.urgency_level)}0D;">
+                <div class="font-medium flex items-center gap-1" style="color:${urgencyDotColor(a.urgency_level)}">
+                  ${a.urgency_level && a.urgency_level !== 'routine' ? '●' : ''} ${new Date(a.start_time).toLocaleTimeString('ka-GE', {hour:'2-digit', minute:'2-digit'})}
+                </div>
+                <div class="text-ink/80 truncate">${escapeHtml(a.patient_name || '')}</div>
+              </div>
+            `).join('') : `<p class="text-[11px] text-muted">—</p>`}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <p class="text-xs text-muted mt-3 flex items-center gap-1.5">${icon('info', 'w-3.5 h-3.5')}წითელი/ნარინჯისფერი წერტილი მიანიშნებს AI-ს მიერ გამოვლენილ გადაუდებელ/სასწრაფო შემთხვევაზე (განსაზღვრულია პაციენტის სიმპტომების აღწერით).</p>
+  `;
+}
+
+async function renderDoctor() {
+  const tabs = `
+    <div class="flex gap-2 mb-6 border-b border-border overflow-x-auto">
+      ${tabBtn('appointments', 'ვიზიტები', state.doctorTab, 'doctorTab')}
+      ${tabBtn('calendar', 'კალენდარი', state.doctorTab, 'doctorTab')}
+      ${tabBtn('schedule', 'განრიგი', state.doctorTab, 'doctorTab')}
+    </div>`;
+
+  if (state.doctorTab === 'calendar') {
+    const appts = await api('/appointments/me');
+    shell(`
+      <h1 class="display text-3xl font-semibold mb-4">ექიმის დაშბორდი</h1>
+      ${tabs}
+      ${doctorCalendarWeek(appts)}
+    `);
+    return;
+  }
+
+  if (state.doctorTab === 'schedule') {
+    const [profile, timeOff] = await Promise.all([
+      api('/doctor/me'),
+      api('/doctor/timeoff'),
+    ]);
+    shell(`
+      <h1 class="display text-3xl font-semibold mb-4">ექიმის დაშბორდი</h1>
+      ${tabs}
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="bg-surface border border-border rounded-xl p-5">
+          <h3 class="font-semibold mb-4 flex items-center gap-2">${icon('clock', 'text-primary')}სამუშაო საათები</h3>
+          <form onsubmit="return handleScheduleUpdate(event)" class="space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="text-sm font-medium">დაწყების საათი</label>
+                <input type="number" min="0" max="23" id="sched-start" value="${profile.work_start_hour}" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"/></div>
+              <div><label class="text-sm font-medium">დასრულების საათი</label>
+                <input type="number" min="1" max="24" id="sched-end" value="${profile.work_end_hour}" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"/></div>
+            </div>
+            <div><label class="text-sm font-medium">სლოტის ხანგრძლივობა (წუთი)</label>
+              <input type="number" min="10" step="5" id="sched-slot" value="${profile.slot_minutes}" class="w-full mt-1 border border-border rounded-lg px-3 py-2 bg-paper"/></div>
+            <button class="w-full py-2.5 rounded-lg bg-primary text-white font-medium hover:bg-primaryDark transition">განახლება</button>
+          </form>
+        </div>
+        <div class="bg-surface border border-border rounded-xl p-5">
+          <h3 class="font-semibold mb-4 flex items-center gap-2">${icon('calendar-off', 'text-danger')}დასვენების დღეები</h3>
+          <form onsubmit="return handleAddTimeOff(event)" class="flex flex-col sm:flex-row gap-2 mb-4">
+            <input type="date" id="timeoff-date" required min="${new Date().toISOString().slice(0,10)}" class="border border-border rounded-lg px-3 py-2 bg-paper text-sm flex-1"/>
+            <input type="text" id="timeoff-reason" placeholder="მიზეზი (არასავალდებულო)" class="border border-border rounded-lg px-3 py-2 bg-paper text-sm flex-1"/>
+            <button class="px-4 py-2 rounded-lg bg-clay text-white text-sm font-medium hover:opacity-90">დამატება</button>
+          </form>
+          <div class="space-y-2">
+            ${timeOff.length ? timeOff.map(t => `
+              <div class="flex items-center justify-between bg-paper rounded-lg px-3 py-2 text-sm">
+                <span>${new Date(t.date).toLocaleDateString('ka-GE', {dateStyle:'medium'})} ${t.reason ? `— <span class="text-muted">${escapeHtml(t.reason)}</span>` : ''}</span>
+                <button class="text-danger text-xs font-medium" onclick="handleDeleteTimeOff(${t.id})">წაშლა</button>
+              </div>`).join('') : `<p class="text-muted text-sm">დასვენების დღეები არ არის მონიშნული.</p>`}
+          </div>
+        </div>
+      </div>
+    `);
+    return;
+  }
+
+  const appts = await api('/appointments/me');
+  const upcoming = appts.filter(a => a.status === 'scheduled').length;
+  shell(`
+    <h1 class="display text-3xl font-semibold mb-1">ექიმის დაშბორდი</h1>
+    <p class="text-muted mb-6">დაგეგმილი ვიზიტები: <b>${upcoming}</b></p>
+    ${tabs}
+    ${appointmentsTable(appts, 'doctor')}
+  `);
+}
+
+async function handleScheduleUpdate(ev) {
+  ev.preventDefault();
+  const payload = {
+    work_start_hour: parseInt(document.getElementById('sched-start').value, 10),
+    work_end_hour: parseInt(document.getElementById('sched-end').value, 10),
+    slot_minutes: parseInt(document.getElementById('sched-slot').value, 10),
+  };
+  try {
+    await api('/doctor/schedule', 'PUT', payload);
+    toast('განრიგი განახლდა', 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+  return false;
+}
+
+async function handleAddTimeOff(ev) {
+  ev.preventDefault();
+  const date = document.getElementById('timeoff-date').value;
+  const reason = document.getElementById('timeoff-reason').value;
+  try {
+    await api('/doctor/timeoff', 'POST', { date, reason });
+    toast('დასვენების დღე დაემატა', 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+  return false;
+}
+
+async function handleDeleteTimeOff(id) {
+  try {
+    await api(`/doctor/timeoff/${id}`, 'DELETE');
+    toast('წაიშალა', 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ---------------------------- Admin dashboard ------------------------------ */
+
+async function renderAdmin() {
+  const tabs = `
+    <div class="flex gap-2 mb-6 border-b border-border overflow-x-auto">
+      ${tabBtn('analytics', 'ანალიტიკა', state.adminTab, 'adminTab')}
+      ${tabBtn('activity', 'აქტივობა', state.adminTab, 'adminTab')}
+      ${tabBtn('doctors', 'ექიმები', state.adminTab, 'adminTab')}
+      ${tabBtn('users', 'მომხმარებლები', state.adminTab, 'adminTab')}
+    </div>`;
+
+  if (state.adminTab === 'activity') {
+    const activity = await api('/admin/activity?limit=30');
+    const typeIcon = { appointment_created: 'calendar-plus', review_added: 'star', user_registered: 'user-plus' };
+    const typeColor = { appointment_created: '#0F766E', review_added: '#D97757', user_registered: '#6D28D9' };
+    shell(`<h1 class="display text-3xl font-semibold mb-4">ადმინისტრირება</h1>${tabs}
+      <h2 class="font-semibold mb-4 flex items-center gap-2">${icon('activity', 'text-primary')}ბოლო აქტივობა</h2>
+      ${activity.length ? `<div class="bg-surface border border-border rounded-xl divide-y divide-border">
+        ${activity.map(item => `
+          <div class="p-4 flex items-start gap-3">
+            <span class="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style="background:${typeColor[item.type]}1A; color:${typeColor[item.type]}">${icon(typeIcon[item.type] || 'info', 'w-4 h-4')}</span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm">${escapeHtml(item.message)}</p>
+              <p class="text-xs text-muted mt-0.5">${new Date(item.timestamp).toLocaleString('ka-GE', {dateStyle:'medium', timeStyle:'short'})}</p>
+            </div>
+          </div>`).join('')}
+      </div>` : emptyState('აქტივობა ჯერ არ არის.', 'activity')}
+    `);
+    return;
+  }
+
+  if (state.adminTab === 'users') {
+    const search = state.adminUserSearch || '';
+    const roleFilter = state.adminUserRole || '';
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (roleFilter) params.set('role', roleFilter);
+    const users = await api('/admin/users?' + params.toString());
+    shell(`<h1 class="display text-3xl font-semibold mb-4">ადმინისტრირება</h1>${tabs}
+      <div class="flex flex-wrap gap-2 mb-4">
+        <input id="user-search" value="${escapeHtml(search)}" placeholder="ძებნა სახელით ან ელ-ფოსტით..." class="flex-1 min-w-[200px] border border-border rounded-lg px-3 py-2 text-sm bg-paper" onkeydown="if(event.key==='Enter') runUserSearch()"/>
+        <select id="user-role-filter" class="border border-border rounded-lg px-3 py-2 text-sm bg-paper" onchange="runUserSearch()">
+          <option value="" ${!roleFilter ? 'selected' : ''}>ყველა როლი</option>
+          <option value="patient" ${roleFilter==='patient' ? 'selected' : ''}>პაციენტი</option>
+          <option value="doctor" ${roleFilter==='doctor' ? 'selected' : ''}>ექიმი</option>
+          <option value="admin" ${roleFilter==='admin' ? 'selected' : ''}>ადმინი</option>
+        </select>
+        <button class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium" onclick="runUserSearch()">ძებნა</button>
+      </div>
+      <div class="bg-surface border border-border rounded-xl overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-paper text-muted text-left"><tr><th class="p-3">სახელი</th><th class="p-3">ელ-ფოსტა</th><th class="p-3">როლი</th><th class="p-3">ტელეფონი</th><th class="p-3">სტატუსი</th><th class="p-3">მოქმედება</th></tr></thead>
+          <tbody>${users.length ? users.map(u => `<tr class="border-t border-border">
+            <td class="p-3">${escapeHtml(u.full_name)}</td>
+            <td class="p-3">${escapeHtml(u.email)}</td>
+            <td class="p-3">${roleLabel(u.role)}</td>
+            <td class="p-3">${escapeHtml(u.phone||'-')}</td>
+            <td class="p-3"><span class="badge ${u.is_active ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}">${u.is_active ? 'აქტიური' : 'დეაქტივირებული'}</span></td>
+            <td class="p-3">${u.id === parseInt(state.userId, 10) ? '<span class="text-xs text-muted">— თქვენ —</span>' : `<button class="text-xs font-medium ${u.is_active ? 'text-danger' : 'text-success'}" onclick="toggleUserActive(${u.id}, ${u.is_active})">${u.is_active ? 'დეაქტივაცია' : 'გააქტიურება'}</button>`}</td>
+          </tr>`).join('') : `<tr><td colspan="6" class="p-6 text-center text-muted text-sm">მომხმარებელი ვერ მოიძებნა.</td></tr>`}</tbody>
+        </table>
+      </div>`);
+    return;
+  }
+
+  if (state.adminTab === 'doctors') {
+    const doctors = await api('/doctors?include_inactive=true');
+    shell(`<h1 class="display text-3xl font-semibold mb-4">ადმინისტრირება</h1>${tabs}
+      <div class="flex justify-end mb-4">
+        <button class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium flex items-center gap-1.5" onclick="toggleAddDoctorForm()">${icon('user-plus', 'w-4 h-4')}ახალი ექიმის დამატება</button>
+      </div>
+      <div id="add-doctor-form" class="hidden mb-6"></div>
+      <div class="bg-surface border border-border rounded-xl overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-paper text-muted text-left">
+            <tr><th class="p-3">სახელი</th><th class="p-3">სპეციალობა</th><th class="p-3">გამოცდილება</th><th class="p-3">ფასი</th><th class="p-3">სტატუსი</th><th class="p-3">მოქმედება</th></tr>
+          </thead>
+          <tbody>
+            ${doctors.map(d => `
+              <tr class="border-t border-border align-top" id="doc-row-${d.id}">
+                <td class="p-3">${escapeHtml(d.full_name)}</td>
+                <td class="p-3">${escapeHtml(d.specialty)}</td>
+                <td class="p-3">${d.years_experience} წელი</td>
+                <td class="p-3">${d.consultation_fee}₾</td>
+                <td class="p-3"><span class="badge ${d.is_active ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}">${d.is_active ? 'აქტიური' : 'დეაქტივირებული'}</span></td>
+                <td class="p-3 space-x-2">
+                  <button class="text-primary text-xs font-medium" onclick="openEditDoctorForm(${d.id})">რედაქტირება</button>
+                  <button class="text-danger text-xs font-medium" onclick="toggleDoctorActive(${d.id}, ${d.is_active})">${d.is_active ? 'დეაქტივაცია' : 'გააქტიურება'}</button>
+                </td>
+              </tr>
+              <tr id="doc-edit-row-${d.id}"></tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>`);
+    return;
+  }
+
+  const [a, topDoctors, tip, aqi, holidays] = await Promise.all([
+    api('/admin/analytics'),
+    api('/admin/top-doctors?limit=5'),
+    api('/health-tip', 'GET', null, false).catch(() => ({available:false})),
+    api('/air-quality', 'GET', null, false).catch(() => ({available:false})),
+    api('/holidays', 'GET', null, false).catch(() => []),
+  ]);
+  const specialtyEntries = Object.entries(a.appointments_per_specialty);
+  const dayEntries = Object.entries(a.appointments_last_7_days);
+  const revenueEntries = Object.entries(a.revenue_last_7_days);
+  const todayStr2 = new Date().toISOString().slice(0, 10);
+  const upcomingHolidays = holidays.filter(h => h.date >= todayStr2).slice(0, 3);
+
+  shell(`
+    <h1 class="display text-3xl font-semibold mb-4">ადმინისტრირება</h1>
+    ${tabs}
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      ${statCard('სულ მომხმარებელი', a.total_users)}
+      ${statCard('პაციენტი', a.total_patients)}
+      ${statCard('ექიმი', a.total_doctors)}
+      ${statCard('სულ ჯავშანი', a.total_appointments)}
+      ${statCard('დასრულებული', a.completed_appointments, 'success')}
+      ${statCard('გაუქმებული', a.cancelled_appointments, 'danger')}
+      ${statCard('პლატფორმის რეიტინგი', a.avg_platform_rating ? a.avg_platform_rating + ' / 5' : '—')}
+      ${statCard('სავარაუდო შემოსავალი', a.total_revenue + '₾')}
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+      <div class="bg-surface border border-border rounded-xl p-5">
+        <h3 class="font-semibold mb-4">ჯავშნები სპეციალობის მიხედვით</h3>
+        ${specialtyEntries.length ? '<div class="h-64"><canvas id="chart-specialty"></canvas></div>' : emptyState('მონაცემი არ არის.', 'pie-chart')}
+      </div>
+      <div class="bg-surface border border-border rounded-xl p-5">
+        <h3 class="font-semibold mb-4">ბოლო 7 დღის აქტივობა</h3>
+        <div class="h-64"><canvas id="chart-days"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+      <div class="bg-surface border border-border rounded-xl p-5">
+        <h3 class="font-semibold mb-4 flex items-center gap-2">${icon('banknote', 'text-primary')}შემოსავალი ბოლო 7 დღეში</h3>
+        <div class="h-56"><canvas id="chart-revenue"></canvas></div>
+      </div>
+      <div class="bg-surface border border-border rounded-xl p-5">
+        <h3 class="font-semibold mb-4 flex items-center gap-2">${icon('sparkles', 'text-clay')}შეფასებების სენტიმენტ-ანალიზი (AI)</h3>
+        ${(a.review_sentiment.positive||a.review_sentiment.neutral||a.review_sentiment.negative) ? '<div class="h-56"><canvas id="chart-sentiment"></canvas></div>' : emptyState('შეფასებები ჯერ არ არის.', 'star')}
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="bg-surface border border-border rounded-xl p-5">
+        <h3 class="font-semibold mb-4 flex items-center gap-2">${icon('trophy', 'text-clay')}ტოპ ექიმები</h3>
+        ${topDoctors.length ? `<div class="space-y-3">${topDoctors.map((d, i) => `
+          <div class="flex items-center gap-3">
+            <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0" style="background:${i===0?'#D97757':'#E4DFD4'}; color:${i===0?'#fff':'#6B7A78'}">${i+1}</span>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium truncate">${escapeHtml(d.full_name)}</div>
+              <div class="text-xs text-muted">${escapeHtml(d.specialty)} · ${d.appointment_count} ვიზიტი</div>
+            </div>
+            <div class="text-sm">${ratingStars(d.avg_rating, d.review_count)}</div>
+          </div>`).join('')}</div>` : emptyState('მონაცემი არ არის.', 'trophy')}
+      </div>
+      <div class="bg-surface border border-border rounded-xl p-5">
+        <h3 class="font-semibold mb-4 flex items-center gap-2">${icon('info', 'text-primary')}სისტემის მდგომარეობა</h3>
+        <div class="space-y-3 text-sm">
+          ${aqi.available ? `<div class="flex items-center justify-between"><span class="text-muted flex items-center gap-1.5">${icon('wind', 'w-4 h-4')}ჰაერის ხარისხი (${escapeHtml(aqi.location)})</span><span class="badge" style="background:${aqi.color}22; color:${aqi.color}">AQI ${Math.round(aqi.us_aqi)} · ${escapeHtml(aqi.category)}</span></div>` : ''}
+          ${tip.available ? `<div class="flex items-center justify-between"><span class="text-muted flex items-center gap-1.5">${icon('sun', 'w-4 h-4')}ტემპერატურა</span><span>${Math.round(tip.temperature_c)}°C, ${escapeHtml(tip.condition)}</span></div>` : ''}
+          <div class="border-t border-border pt-3">
+            <p class="text-xs text-muted mb-2">უახლოესი უქმე დღეები</p>
+            ${upcomingHolidays.length ? upcomingHolidays.map(h => `<div class="flex justify-between text-xs mb-1"><span>${escapeHtml(h.name)}</span><span class="text-muted">${new Date(h.date).toLocaleDateString('ka-GE', {day:'numeric', month:'short'})}</span></div>`).join('') : '<p class="text-xs text-muted">არ არის.</p>'}
+          </div>
+        </div>
+      </div>
+    </div>
+  `);
+
+  if (specialtyEntries.length) {
+    renderChart('chart-specialty', 'pie', {
+      labels: specialtyEntries.map(e => e[0]),
+      datasets: [{
+        data: specialtyEntries.map(e => e[1]),
+        backgroundColor: specialtyEntries.map(e => specialtyMeta(e[0]).color),
+      }],
+    });
+  }
+  renderChart('chart-days', 'bar', {
+    labels: dayEntries.map(e => e[0].slice(5)),
+    datasets: [{
+      label: 'ჯავშნების რაოდენობა',
+      data: dayEntries.map(e => e[1]),
+      backgroundColor: '#D97757',
+      borderRadius: 6,
+    }],
+  }, { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } });
+
+  renderChart('chart-revenue', 'bar', {
+    labels: revenueEntries.map(e => e[0].slice(5)),
+    datasets: [{
+      label: 'შემოსავალი (₾)',
+      data: revenueEntries.map(e => e[1]),
+      backgroundColor: '#0F766E',
+      borderRadius: 6,
+    }],
+  }, { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } });
+
+  if (a.review_sentiment.positive||a.review_sentiment.neutral||a.review_sentiment.negative) {
+    renderChart('chart-sentiment', 'bar', {
+      labels: ['დადებითი', 'ნეიტრალური', 'უარყოფითი'],
+      datasets: [{
+        data: [a.review_sentiment.positive||0, a.review_sentiment.neutral||0, a.review_sentiment.negative||0],
+        backgroundColor: ['#2F855A', '#B8860B', '#C0392B'],
+        borderRadius: 6,
+      }],
+    }, { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } });
+  }
+}
+
+function runUserSearch() {
+  state.adminUserSearch = document.getElementById('user-search').value.trim();
+  state.adminUserRole = document.getElementById('user-role-filter').value;
+  route();
+}
+
+async function toggleUserActive(userId, isActive) {
+  const action = isActive ? 'დეაქტივაცია' : 'გააქტიურება';
+  if (!confirm(`დარწმუნებული ხართ, რომ გსურთ მომხმარებლის ${action}?`)) return;
+  try {
+    await api(`/admin/users/${userId}/status`, 'PUT', { is_active: !isActive });
+    toast(`მომხმარებელი ${isActive ? 'დეაქტივირდა' : 'გააქტიურდა'}`, 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+const chartInstances = {};
+function renderChart(canvasId, type, data, extraOptions) {
+  if (!window.Chart) return;
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+  const textColor = chartTextColor();
+  const gridColor = chartGridColor();
+  const baseOptions = {
+    responsive: true, maintainAspectRatio: false,
+    color: textColor,
+    plugins: { legend: { labels: { color: textColor } } },
+    scales: type === 'pie' ? {} : {
+      x: { ticks: { color: textColor }, grid: { color: gridColor } },
+      y: { ticks: { color: textColor }, grid: { color: gridColor } },
+    },
+  };
+  const merged = Object.assign({}, baseOptions, extraOptions || {});
+  if (extraOptions && extraOptions.plugins) merged.plugins = Object.assign({}, baseOptions.plugins, extraOptions.plugins, {
+    legend: Object.assign({}, baseOptions.plugins.legend, extraOptions.plugins.legend),
+  });
+  if (extraOptions && extraOptions.scales) merged.scales = Object.assign({}, baseOptions.scales, extraOptions.scales);
+  chartInstances[canvasId] = new Chart(canvas.getContext('2d'), { type, data, options: merged });
+}
+
+function statCard(label, value, kind) {
+  const color = kind === 'success' ? '#2F855A' : kind === 'danger' ? '#C0392B' : '#0F766E';
+  return `<div class="bg-surface border border-border rounded-xl p-4 relative overflow-hidden card-hover">
+    <div class="absolute top-0 left-0 w-full h-1" style="background:${color}"></div>
+    <div class="text-2xl font-display font-semibold" style="color:${color}">${value}</div>
+    <div class="text-xs text-muted mt-1">${label}</div>
+  </div>`;
+}
+
+/* ---------------------------- Admin: doctor CRUD --------------------------- */
+
+function toggleAddDoctorForm() {
+  const el = document.getElementById('add-doctor-form');
+  if (!el.classList.contains('hidden')) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <div class="bg-surface border border-border rounded-xl p-5">
+      <h3 class="font-semibold mb-4">ახალი ექიმის დამატება</h3>
+      <form onsubmit="return submitNewDoctor(event)" class="grid sm:grid-cols-2 gap-3">
+        <input required id="new-doc-name" placeholder="სრული სახელი" class="border border-border rounded-lg px-3 py-2 text-sm bg-paper"/>
+        <input required type="email" id="new-doc-email" placeholder="ელ-ფოსტა" class="border border-border rounded-lg px-3 py-2 text-sm bg-paper"/>
+        <input required type="password" minlength="6" id="new-doc-password" placeholder="პაროლი" class="border border-border rounded-lg px-3 py-2 text-sm bg-paper"/>
+        <input id="new-doc-phone" placeholder="ტელეფონი" class="border border-border rounded-lg px-3 py-2 text-sm bg-paper"/>
+        <input required id="new-doc-specialty" placeholder="სპეციალობა" class="border border-border rounded-lg px-3 py-2 text-sm bg-paper"/>
+        <input type="number" min="0" id="new-doc-experience" placeholder="გამოცდილება (წელი)" class="border border-border rounded-lg px-3 py-2 text-sm bg-paper"/>
+        <input type="number" min="0" id="new-doc-fee" placeholder="ვიზიტის ღირებულება (₾)" class="border border-border rounded-lg px-3 py-2 text-sm bg-paper"/>
+        <textarea id="new-doc-bio" rows="2" placeholder="მოკლე ბიოგრაფია" class="sm:col-span-2 border border-border rounded-lg px-3 py-2 text-sm bg-paper"></textarea>
+        <button class="sm:col-span-2 py-2.5 rounded-lg bg-primary text-white font-medium hover:bg-primaryDark transition">დამატება</button>
+      </form>
+    </div>`;
+}
+
+async function submitNewDoctor(ev) {
+  ev.preventDefault();
+  const payload = {
+    full_name: document.getElementById('new-doc-name').value,
+    email: document.getElementById('new-doc-email').value,
+    password: document.getElementById('new-doc-password').value,
+    phone: document.getElementById('new-doc-phone').value,
+    specialty: document.getElementById('new-doc-specialty').value,
+    years_experience: parseInt(document.getElementById('new-doc-experience').value || '0', 10),
+    consultation_fee: parseFloat(document.getElementById('new-doc-fee').value || '0'),
+    bio: document.getElementById('new-doc-bio').value,
+  };
+  try {
+    await api('/admin/doctors', 'POST', payload);
+    toast('ექიმი დაემატა', 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+  return false;
+}
+
+function openEditDoctorForm(doctorId) {
+  api(`/doctors?include_inactive=true`).then(doctors => {
+    const d = doctors.find(x => x.id === doctorId);
+    if (!d) return;
+    const row = document.getElementById(`doc-edit-row-${doctorId}`);
+    row.innerHTML = `<td colspan="6" class="p-4 bg-paper">
+      <div class="grid sm:grid-cols-2 gap-3">
+        <input id="edit-doc-name-${doctorId}" value="${escapeHtml(d.full_name)}" placeholder="სახელი" class="border border-border rounded-lg px-3 py-2 text-sm"/>
+        <input id="edit-doc-specialty-${doctorId}" value="${escapeHtml(d.specialty)}" placeholder="სპეციალობა" class="border border-border rounded-lg px-3 py-2 text-sm"/>
+        <input type="number" id="edit-doc-experience-${doctorId}" value="${d.years_experience}" placeholder="გამოცდილება" class="border border-border rounded-lg px-3 py-2 text-sm"/>
+        <input type="number" id="edit-doc-fee-${doctorId}" value="${d.consultation_fee}" placeholder="ფასი" class="border border-border rounded-lg px-3 py-2 text-sm"/>
+      </div>
+      <button class="mt-3 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium" onclick="submitEditDoctor(${doctorId})">შენახვა</button>
+    </td>`;
+  });
+}
+
+async function submitEditDoctor(doctorId) {
+  const payload = {
+    full_name: document.getElementById(`edit-doc-name-${doctorId}`).value,
+    specialty: document.getElementById(`edit-doc-specialty-${doctorId}`).value,
+    years_experience: parseInt(document.getElementById(`edit-doc-experience-${doctorId}`).value || '0', 10),
+    consultation_fee: parseFloat(document.getElementById(`edit-doc-fee-${doctorId}`).value || '0'),
+  };
+  try {
+    await api(`/admin/doctors/${doctorId}`, 'PUT', payload);
+    toast('ექიმის მონაცემები განახლდა', 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function toggleDoctorActive(doctorId, isActive) {
+  const action = isActive ? 'დეაქტივაცია' : 'გააქტიურება';
+  if (!confirm(`დარწმუნებული ხართ, რომ გსურთ ექიმის ${action}?`)) return;
+  try {
+    await api(`/admin/doctors/${doctorId}`, 'PUT', { is_active: !isActive });
+    toast(`ექიმი ${isActive ? 'დეაქტივირდა' : 'გააქტიურდა'}`, 'success');
+    route();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* -------------------------------- Boot ----------------------------------- */
+
+document.addEventListener('click', (ev) => {
+  if (!state.notifPanelOpen) return;
+  const panel = document.getElementById('notif-panel');
+  if (panel && !panel.contains(ev.target) && !ev.target.closest('[onclick="toggleNotifPanel()"]')) {
+    state.notifPanelOpen = false;
+    panel.classList.add('hidden');
+  }
+});
+
+route();
+</script>
+</body>
+</html>
+
