@@ -873,6 +873,20 @@ async function toggleFavorite(doctorId, isFavorite) {
   } catch (e) { toast(e.message, 'error'); }
 }
 
+function nextAvailableBadge(d) {
+  if (!d.next_available) {
+    return `<span class="text-[11px] text-muted flex items-center gap-1">${icon('calendar-x', 'w-3 h-3')}უახლოეს კვირებში თავისუფალი დრო არ არის</span>`;
+  }
+  const dt = new Date(d.next_available);
+  const now = new Date();
+  const isToday = dt.toDateString() === now.toDateString();
+  const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+  const isTomorrow = dt.toDateString() === tomorrow.toDateString();
+  const time = dt.toLocaleTimeString('ka-GE', { hour: '2-digit', minute: '2-digit' });
+  const dayLabel = isToday ? 'დღეს' : isTomorrow ? 'ხვალ' : dt.toLocaleDateString('ka-GE', { day: 'numeric', month: 'short' });
+  return `<span class="text-[11px] font-medium flex items-center gap-1" style="color:#2F855A">${icon('calendar-check', 'w-3 h-3')}უახლოესი ვიზიტი: ${dayLabel}, ${time}</span>`;
+}
+
 function doctorCard(d) {
   const meta = specialtyMeta(d.specialty);
   return `<div class="bg-surface border border-border rounded-xl p-5 fade-in card-hover relative overflow-hidden">
@@ -892,6 +906,7 @@ function doctorCard(d) {
       ${favoriteStarBtn(d)}
     </div>
     <p class="text-sm text-muted mt-2 line-clamp-3">${escapeHtml(d.bio || '')}</p>
+    <div class="mt-2">${nextAvailableBadge(d)}</div>
     <div class="flex items-center justify-between mt-4">
       <span class="text-sm font-medium flex items-center gap-1">${icon('banknote', 'w-4 h-4 text-muted')}${d.consultation_fee}₾ / ვიზიტი</span>
       <button class="text-sm px-3 py-1.5 rounded-lg grad-primary text-white hover:opacity-90 flex items-center gap-1.5" onclick="quickBook(${d.id}, '${escapeHtml(d.specialty)}')">${icon('calendar-plus', 'w-4 h-4')}დაჯავშნა</button>
@@ -1414,7 +1429,8 @@ function doctorsListForBooking(doctors) {
         ${favoriteStarBtn(d)}
       </div>
       <div class="text-xs text-muted mb-1">${ratingStars(d.avg_rating, d.review_count)}</div>
-      <div class="text-xs text-muted mb-3">${d.consultation_fee}₾ · ${d.years_experience} წლიანი გამოცდილება</div>
+      <div class="text-xs text-muted mb-1">${d.consultation_fee}₾ · ${d.years_experience} წლიანი გამოცდილება</div>
+      <div class="mb-3">${nextAvailableBadge(d)}</div>
       <button class="w-full py-1.5 rounded-lg bg-primary text-white text-sm hover:bg-primaryDark flex items-center justify-center gap-1.5" onclick="selectDoctorForBooking(${d.id})">${icon('calendar-clock', 'w-4 h-4')}დროის არჩევა</button>
     </div>`;}).join('')}</div>
   <div id="slot-panel" class="mt-4"></div>`;

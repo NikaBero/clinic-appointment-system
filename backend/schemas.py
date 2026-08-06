@@ -82,6 +82,7 @@ class DoctorOut(BaseModel):
     avg_rating: Optional[float] = None
     review_count: int = 0
     is_favorite: bool = False
+    next_available: Optional[str] = None
 
     class Config:
         from_attributes = True

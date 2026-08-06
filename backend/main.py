@@ -52,7 +52,55 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
-def doctor_to_out(doc: models.DoctorProfile, favorite_doctor_ids: set | None = None) -> schemas.DoctorOut:
+def next_available_slot(doc: models.DoctorProfile, db: Session, days_ahead: int = 14) -> str | None:
+    """
+    პირველი თავისუფალი სლოტის მოძებნა შემდეგი `days_ahead` დღის განმავლობაში —
+    გამოიყენება ექიმის ბარათზე "შემდეგი ვიზიტი" badge-ისთვის, რომ პაციენტმა
+    სიაშივე დაინახოს რომელი ექიმია ყველაზე მალე ხელმისაწვდომი,
+    /doctors/{id}/availability-ის დღეების ცალ-ცალკე გამოძახების გარეშე.
+    """
+    now = datetime.utcnow()
+    horizon_end = now + timedelta(days=days_ahead)
+    taken = {
+        a.start_time
+        for a in db.query(models.Appointment)
+        .filter(
+            models.Appointment.doctor_id == doc.id,
+            models.Appointment.status != models.AppointmentStatus.cancelled,
+            models.Appointment.start_time >= now,
+            models.Appointment.start_time < horizon_end,
+        )
+        .all()
+    }
+    time_off_dates = {
+        t.date
+        for t in db.query(models.DoctorTimeOff).filter(
+            models.DoctorTimeOff.doctor_id == doc.id,
+            models.DoctorTimeOff.date >= now.date(),
+            models.DoctorTimeOff.date <= horizon_end.date(),
+        )
+    }
+
+    slot_delta = timedelta(minutes=doc.slot_minutes)
+    for day_offset in range(days_ahead):
+        target_day = (now + timedelta(days=day_offset)).date()
+        if target_day in time_off_dates or holiday_name(target_day):
+            continue
+        day_start = datetime.combine(target_day, datetime.min.time()) + timedelta(hours=doc.work_start_hour)
+        day_end = datetime.combine(target_day, datetime.min.time()) + timedelta(hours=doc.work_end_hour)
+        cursor = day_start
+        while cursor + slot_delta <= day_end:
+            if cursor > now and cursor not in taken:
+                return cursor.strftime("%Y-%m-%dT%H:%M")
+            cursor += slot_delta
+    return None
+
+
+def doctor_to_out(
+    doc: models.DoctorProfile,
+    favorite_doctor_ids: set | None = None,
+    db: Session | None = None,
+) -> schemas.DoctorOut:
     ratings = [r.rating for r in doc.reviews]
     avg_rating = round(sum(ratings) / len(ratings), 2) if ratings else None
     return schemas.DoctorOut(
@@ -70,6 +118,7 @@ def doctor_to_out(doc: models.DoctorProfile, favorite_doctor_ids: set | None = N
         avg_rating=avg_rating,
         review_count=len(ratings),
         is_favorite=bool(favorite_doctor_ids and doc.id in favorite_doctor_ids),
+        next_available=next_available_slot(doc, db) if db is not None else None,
     )
 
 
@@ -334,7 +383,7 @@ def list_doctors(
             return []
         query = query.filter(models.DoctorProfile.id.in_(favorite_ids))
 
-    return [doctor_to_out(d, favorite_ids) for d in query.all()]
+    return [doctor_to_out(d, favorite_ids, db) for d in query.all()]
 
 
 @app.get("/doctors/{doctor_id}/reviews", response_model=list[schemas.ReviewOut], tags=["Doctors"])
@@ -1099,7 +1148,7 @@ def ai_recommend(payload: schemas.SymptomRequest, db: Session = Depends(get_db))
         )
         .all()
     )
-    doctors_out = [doctor_to_out(d) for d in doctors]
+    doctors_out = [doctor_to_out(d, db=db) for d in doctors]
     # ჭკვიანი დალაგება: რეიტინგი + გამოცდილება მაღალ ადგილას, ფასი კი
     # ოდნავ ამცირებს ქულას — ასე პაციენტს ვთავაზობთ საუკეთესო თანაფარდობას
     # ხარისხსა და ღირებულებას შორის ("საუკეთესო არჩევანი" ბეიჯი frontend-ზე).

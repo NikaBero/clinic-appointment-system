@@ -389,6 +389,15 @@ DEMO_DOCTORS = [
         "years_experience": 5,
         "consultation_fee": 44,
     },
+    {
+        "email": "nikabero@gmail.com",
+        "password": "nika12345",
+        "full_name": "ნიკოლოზ ბერიძე",
+        "specialty": "კარდიოლოგი",
+        "bio": "კარდიოლოგი, სპეციალიზებულია გულ-სისხლძარღვთა სისტემის პროფილაქტიკურ დიაგნოსტიკასა და მკურნალობაში.",
+        "years_experience": 15,
+        "consultation_fee": 90,
+    },
 ]
 
 
@@ -439,6 +448,7 @@ def main():
     print("  ადმინი:    admin@clinic.ge / admin123")
     print("  პაციენტი:  patient@clinic.ge / patient123")
     print("  ექიმები:   cardio@clinic.ge / doctor123  (და სხვა, იხ. seed.py)")
+    print("             nikabero@gmail.com / nika12345")
 
 
 if __name__ == "__main__":
