@@ -64,7 +64,7 @@ def fetch_health_tip() -> dict:
                 "current": "temperature_2m,weather_code,uv_index",
                 "timezone": "Asia/Tbilisi",
             },
-            timeout=4.0,
+            timeout=10.0,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -116,7 +116,7 @@ def fetch_air_quality() -> dict:
                 "current": "pm2_5,pm10,us_aqi",
                 "timezone": "Asia/Tbilisi",
             },
-            timeout=4.0,
+            timeout=10.0,
         )
         resp.raise_for_status()
         current = resp.json().get("current", {})
