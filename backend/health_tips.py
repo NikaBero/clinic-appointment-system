@@ -10,10 +10,36 @@
 ფუნქციონალი ხელუხლებელი რჩება.
 """
 
+import time
+
 import httpx
 
 TBILISI_LAT = 41.7151
 TBILISI_LON = 44.8271
+
+# მარტივი in-memory cache (TTL წუთებში) — Render-ის გაზიარებულ გამავალ IP-ს
+# ბევრი სხვა აპლიკაციაც იყენებს, ამიტომ api.open-meteo.com ხშირად აბრუნებს
+# 429 (Too Many Requests) ყოველ page-load-ზე ახალი მოთხოვნისას. ქეშირება
+# რეალურ მოთხოვნებს წუთში რამდენიმემდე ამცირებს ამინდის მონაცემის
+# დაკარგვის გარეშე (ეს ისედაც ამდენ ხანში მნიშვნელოვნად არ იცვლება).
+_CACHE_TTL_SECONDS = 20 * 60
+# წარუმატებელი მოთხოვნის (მაგ: 429 Too Many Requests) TTL გაცილებით მოკლეა,
+# რომ სისტემამ სწრაფად სცადოს თავიდან, როცა rate limit მოიხსნება, მაგრამ
+# მაინც არ დაბომბოს გარე API ყოველ page-load-ზე failure-ის დროსაც.
+_FAILURE_TTL_SECONDS = 2 * 60
+_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _cached(key: str, fetch_fn):
+    now = time.monotonic()
+    cached = _cache.get(key)
+    if cached:
+        ttl = _CACHE_TTL_SECONDS if cached[1].get("available") else _FAILURE_TTL_SECONDS
+        if now - cached[0] < ttl:
+            return cached[1]
+    result = fetch_fn()
+    _cache[key] = (now, result)
+    return result
 
 WEATHER_CODE_LABELS = {
     0: "მზიანი", 1: "ძირითადად მზიანი", 2: "ნაწილობრივ ღრუბლიანი", 3: "ღრუბლიანი",
@@ -55,6 +81,10 @@ def _generate_tip(temp_c: float, uv_index: float, weather_code: int):
 
 
 def fetch_health_tip() -> dict:
+    return _cached("health_tip", _fetch_health_tip_live)
+
+
+def _fetch_health_tip_live() -> dict:
     try:
         resp = httpx.get(
             "https://api.open-meteo.com/v1/forecast",
@@ -107,6 +137,10 @@ def fetch_air_quality() -> dict:
     საზოგადოებრივი ჯანმრთელობის საჯარო მონაცემი — თბილისის ჰაერის ხარისხის
     ინდექსი (Open-Meteo Air Quality API, უფასო, key-ის გარეშე).
     """
+    return _cached("air_quality", _fetch_air_quality_live)
+
+
+def _fetch_air_quality_live() -> dict:
     try:
         resp = httpx.get(
             "https://air-quality-api.open-meteo.com/v1/air-quality",
@@ -143,5 +177,5 @@ def fetch_air_quality() -> dict:
             "color": color,
             "advice": advice,
         }
-    except Exception:
-        return {"available": False}
+    except Exception as e:
+        return {"available": False, "debug_error": f"{type(e).__name__}: {e}"}

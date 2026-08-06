@@ -288,6 +288,7 @@ class AirQualityOut(BaseModel):
     category: Optional[str] = None
     color: Optional[str] = None
     advice: Optional[str] = None
+    debug_error: Optional[str] = None
 
 
 class HolidayOut(BaseModel):
