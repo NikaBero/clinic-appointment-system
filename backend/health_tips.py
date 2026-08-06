@@ -84,8 +84,8 @@ def fetch_health_tip() -> dict:
             "tip": tip_text,
             "related_specialty": related_specialty,
         }
-    except Exception:
-        return {"available": False}
+    except Exception as e:
+        return {"available": False, "debug_error": f"{type(e).__name__}: {e}"}
 
 
 def _aqi_category(us_aqi: float):

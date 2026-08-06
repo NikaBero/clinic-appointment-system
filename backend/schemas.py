@@ -276,6 +276,7 @@ class HealthTipOut(BaseModel):
     uv_index: Optional[float] = None
     tip: Optional[str] = None
     related_specialty: Optional[str] = None
+    debug_error: Optional[str] = None
 
 
 class AirQualityOut(BaseModel):
