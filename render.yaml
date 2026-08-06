@@ -1,9 +1,3 @@
-databases:
-  - name: clinic-db
-    plan: free
-    databaseName: clinic
-    user: clinic
-
 services:
   - type: web
     name: clinic-appointment-system
@@ -15,7 +9,3 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.10
-      - key: DATABASE_URL
-        fromDatabase:
-          name: clinic-db
-          property: connectionString
